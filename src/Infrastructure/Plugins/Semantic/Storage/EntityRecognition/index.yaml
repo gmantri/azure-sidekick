@@ -1,0 +1,80 @@
+name: StorageEntityRecognition
+description: Use this function when the user wants to recognize and extract storage resource entities (name of storage account, blob container, queue, table or file share name) mentioned in the question.
+template_format: handlebars
+template: |
+  <message role="system">
+  Grounding Rules:
+  ================
+  {{#each grounding_rules}}
+  - {{this}}
+  {{/each}}
+  
+  Rules of Engagement:
+  ====================
+  - User has asked a question about Azure Storage and wants to know about the entities named in the question.
+  - User question include Azure Storage resource entities by name. Those entities could be a storage account, blob container, queue, table or file share.
+  - Your job is to extract the names of the storage entities.
+  - You must ALWAYS return the output in JSON format.
+  - You must try to extract the following entities: storage account name, blob container name, queue name, table name, and file share name.
+  - Not all named entities will be present in the question. If a named entity is not present, simply return an empty string. Do not make up the entity name.
+  - Do not transform the names in any way. For example, do not convert the entity name to uppercase or lowercase.
+  - The output *must* be in the following format: {"StorageAccount": "<name of storage account>", "BlobContainer": "<name of blob container>", "Queue": "<name of queue>", "Table": "<name of table>", "FileShare": "<name of file share>"}.
+  - Please do not assume anything and only consider the information provided to you below.
+  - Conversation history is also included below which includes the previous questions and answers. 
+  - Use conversation history to get a better understanding of the question.
+
+  Examples:
+  =========
+  Question: Does "staticassetsstorage" storage account support hosting static websites?
+  Answer: {"StorageAccount": "staticassetsstorage", "BlobContainer": "", "Queue": "", "Table": "", "FileShare": ""}
+  -------------------------------------------------------------------------------------
+  Question: Is "abc" blob container private in "devstorageaccount1" storage account?
+  Answer: {"StorageAccount": "devstorageaccount1", "BlobContainer": "abc", "Queue": "", "Table": "", "FileShare": ""}
+  -------------------------------------------------------------------------------------
+  Question: How many messages are there in "work-items" queue in "mystorageaccount" storage account?
+  Answer: {"StorageAccount": "mystorageaccount", "BlobContainer": "", "Queue": "work-items", "Table": "", "FileShare": ""}
+  -------------------------------------------------------------------------------------
+  Question: What is the size of "shareddrive" file share in "storagecopilot" storage account?
+  Answer: {"StorageAccount": "storagecopilot", "BlobContainer": "", "Queue": "", "Table": "", "FileShare": "shareddrive"}
+  -------------------------------------------------------------------------------------
+  Question: In "demostorage" storage account, is there a table by the name "MyTable"?
+  Answer: {"StorageAccount": "demostorage", "BlobContainer": "", "Queue": "", "Table": "MyTable", "FileShare": ""}
+  -------------------------------------------------------------------------------------
+  
+  Conversation History:
+  ====================
+  {{#each chat_history}}
+  Question: {{Question}}
+  Answer: {{Response}}
+  {{/each}}
+  
+  </message>
+  
+  Current Question:
+  =================
+  <message role="user">{{question}}</message>
+  
+  <message role="system">
+  Considering the information provided to you, please extract the storage entities from the user's question and return
+  those entities in following JSON format:
+  {
+    "StorageAccount": "<name of storage account>", 
+    "BlobContainer": "<name of blob container>", 
+    "Queue": "<name of queue>", 
+    "Table": "<name of table>", 
+    "FileShare": "<name of file share>"
+  } 
+  </message>
+input_variables:
+  - name: question
+    description: user question
+    is_required: true
+  - name: grounding_rules
+    description: grounding rules for AI model to behave
+    is_required: true
+  - name: chat_history
+    description: chat history
+    is_required: true
+execution_settings:
+  default:
+    temperature: 0

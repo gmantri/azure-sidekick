@@ -1,0 +1,135 @@
+name: Intent
+description: Use this function to analyze a user's question and determine the intent from a predefined list.
+template_format: handlebars
+template: |
+  <message role="system">
+  Grounding Rules:
+  ================
+  {{#each grounding_rules}}
+  - {{this}}
+  {{/each}}
+
+  Rules of Engagement:
+  ====================
+  - User has asked a question and wanted to know the intent of the question. 
+  - Your job is to recognize the intent of the from the question being asked by the user. 
+  - Please do not assume anything and only consider the information provided to you below.
+  - Conversation history is also included below which only includes the previous questions asked by the user. 
+  - Use conversation history to get a better understanding of the question.
+  - You are only supposed to return an intent from the list of intents mentioned below.
+  - All intents are inside <intents> tag.
+  - Each intent is inside <intent> tag. Each intent will have a name and a description.
+  - Use the description to identify the intent.
+  - Please return the name of the intent only and nothing else.
+
+  Possible Intents:
+  =================
+  <intents>
+    <intent>
+      <name>Storage</name>
+      <description>
+        Return this intent if the question:
+        - Keywords: Has keywords such as 'Azure Storage', 'Blob Storage', 'Queue Storage', 'File Storage', 'Table Storage', 'Disk Storage', 'Data Lake Storage', 'Backup', or 'Azure Storage Explorer'.
+        - Context: Has context regarding Azure's storage capabilities, types of storage, data management, or other aspects specifically related to Azure Storage.
+        - Features: Mention of specific features such as security, scalability, redundancy, data replication, or pricing within the Azure Storage ecosystem.
+        - Operation or Commands: Asking for details about operations or commands in Azure Storage, like creating a storage account, uploading or downloading data, managing data, etc.
+        - Troubleshooting: Looking for troubleshooting tips, specifically seeking solutions for issues or errors encountered while using Azure Storage.
+        - Comparisons: Seeking comparison between Azure Storage and other cloud storage services like AWS S3, Google Cloud Storage, etc. and also comparison between various Azure Storage services.
+        - Rules: Looking for rules, restrictions and naming conventions applicable to storage accounts, blob containers & blobs, queues & messages, tables & entities and file shares, directories & files.
+        - Storage resources: Finding information about storage accounts, blob containers & blobs, queues & messages, tables & entities and file shares, directories & files in an Azure subscription.
+        - "How to" questions related to Azure Storage.
+      </description>
+    </intent>
+    <intent>
+      <name>Azure</name>
+      <description>
+        Return this intent if the question:
+        - Keywords: Has keywords which include 'Azure' along with other Azure services like 'Azure Functions', 'Azure VMs', 'Azure Active Directory', 'Azure SQL', 'Azure Logic Apps', etc. but not 'Azure Storage' or its related terms.
+        - Context: Mentions Azure services, Azure cloud architecture, deployment, scaling, pricing etc., but not about storage or data management.
+        - Features: Is asking about specific features of Azure services like security, scalability, integration, DevOps, or pricing but not related to Azure Storage.
+        - Operation or Commands: Seeking information about how to perform certain operations or work with commands like creating a resource, configuring a network etc. in Azure.
+        - Comparisons: Seeking comparison between Azure and other cloud providers like AWS or GCP etc. or comparing Azure services, but not involving Azure Storage.
+        - Troubleshooting: Looking for troubleshooting tips and seeking solutions for issues or errors encountered while using Azure services, but not specifically Azure Storage.
+      </description>
+    </intent>
+    <intent>
+      <name>Information</name>
+      <description>
+        Return this intent if the question:
+        - Sentence Structure: Is not phrased as a question (i.e., it does not start with words like 'what', 'how', 'why', 'does', 'is', etc.), it may be a statement or information sharing rather than a question.
+        - Instructions or Commands: Is using imperative sentences, such as "Show me...", "Tell me...", or "Let's move on to...", they might be providing instructions about their next set of questions.
+        - General Remarks: Includes subjective opinions, personal experiences, or general remarks that don't require an answer, they're likely making a statement rather than asking a question.
+        - Context: Is referring to a completely different subject unrelated to this application, and doesn't seem to be seeking information or a response, it's likely a statement or information sharing.
+        - Facts or Data Sharing: Contains specific data, facts, or statistics, they might be sharing information rather than asking a question.
+      </description>
+    </intent>
+    <intent>
+      <name>Ability</name>
+      <description>
+        Return this intent if the question:
+        - Keywords: Contains words like 'capabilities', 'abilities', 'features', 'functions', 'help', 'do', 'perform', 'provide', 'assistance', 'support', etc.
+        - Direct Inquiries: Is directly asking what you can do, e.g., "What can you do?" or "How can you help me?".
+        - Scope of Assistance: Is asking about the range or limitations of your assistance, e.g., "What kind of tasks can you handle?" or "Are there things you can't do?".
+      </description>
+    </intent>
+    <intent>
+      <name>MultipleIntents</name>
+      <description>
+        Return this intent if the question:
+        - Multiple Topics: Includes more than one distinct topic or subject. In the given example, 'Azure Cosmos DB' and 'Azure Storage' are two different topics.
+        - Use of Conjunctions: Makes use of conjunctions like 'and', 'or', 'but', etc.
+        - Multiple Question Phrases: Contains more than one question phrase ('what', 'how', 'why', etc.).
+        - Distinct Keywords: Includes distinct keywords related to different topics.
+        - Complexity: Is complex. For example, the question is asking about the comparison, integration, or differences between different topics.
+      </description>
+    </intent>
+    <intent>
+      <name>Unclear</name>
+      <description>
+        Return this intent if the question:
+        - Vague Terms: Uses non-specific terms or phrases without enough context.
+        - Lack of Keywords: Lacks specific keywords or the keywords used are too broad or unrelated.
+        - Incomplete Sentences: Is an incomplete sentence or thought and does not contain full information.
+        - Ambiguity: Is ambiguous because of its wording or structure leading to multiple interpretations.
+        - Lack of Context: If it refers to something not mentioned in the conversation history, or if it's unclear how it relates to previous messages.
+        - General Confusion: Is confusing in its overall phrasing or logic.
+        - Unable to understand: Is generally not understandable by you.
+      </description>
+    </intent>
+    <intent>
+      <name>Other</name>
+      <description>
+        Return this intent if the question:
+        Not about Azure: is not about Azure.
+        Unmatched intent: Intent does not match any of the other intents mentioned above.
+      </description>
+    </intent>
+  </intents>
+  
+  Conversation History:
+  ====================
+  {{#each chat_history}}
+  Question: {{Question}}
+  {{/each}}
+  </message>
+  
+  Current Question:
+  =================
+  <message role="user">{{question}}</message>
+  
+  <message role="system">
+  Considering the information provided to you, please identify the intent of the question. You must select only one intent from the list of intents above.
+  </message>
+input_variables:
+  - name: question
+    description: user question
+    is_required: true
+  - name: grounding_rules
+    description: grounding rules for AI model to behave
+    is_required: true
+  - name: chat_history
+    description: chat history
+    is_required: true
+execution_settings:
+  default:
+    temperature: 0

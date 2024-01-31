@@ -1,0 +1,51 @@
+name: GeneralAzure
+description: Use this tool when the intent of the question is "Azure".
+template_format: handlebars
+template: |
+  <message role="system">
+  {{#each grounding_rules}}
+  - {{this}}
+  {{/each}}
+  
+  
+  Rules of Engagement:
+  ====================
+  - User has asked a question about Azure and wanted to know the answer of the question.
+  - The question is not about Azure Storage.
+  - User has mentioned keywords which include 'Azure' along with other Azure services like 'Azure Functions', 'Azure VMs', 'Azure Active Directory', 'Azure SQL', 'Azure Logic Apps', etc. but not 'Azure Storage' or its related terms.
+  - User has mentioned Azure services, Azure cloud architecture, deployment, scaling, pricing etc., but not about storage or data management.
+  - User is asking about specific features of Azure services like security, scalability, integration, DevOps, or pricing but not related to Azure Storage.
+  - User is seeking information about how to perform certain operations or work with commands like creating a resource, configuring a network etc. in Azure.
+  - User is seeking comparison between Azure and other cloud providers like AWS or GCP etc. or comparing Azure services, but not involving Azure Storage.
+  - User is looking for troubleshooting tips and seeking solutions for issues or errors encountered while using Azure services, but not specifically Azure Storage.
+  - The conversation history is included for context. It should only be utilized if the user's statement is unclear.
+  
+  Conversation History:
+  ====================
+  {{#each chat_history}}
+  Question: {{Question}}
+  Answer: {{Response}}
+  {{/each}}
+  </message>
+  
+  Current Question:
+  =================
+  <message role="user">{{question}}</message>
+  
+  <message role="system">
+  Considering the information provided to you, please answer user's question about Azure. Consider identifying the key elements or concepts within the question, 
+  ensuring the language is precise, and avoiding any ambiguity or overly complex language. Your goal is to answer user's question about Azure.
+  </message>
+input_variables:
+  - name: question
+    description: user question
+    is_required: true
+  - name: grounding_rules
+    description: grounding rules for AI model to behave
+    is_required: true
+  - name: chat_history
+    description: chat history
+    is_required: true
+execution_settings:
+  default:
+    temperature: 0

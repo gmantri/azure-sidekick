@@ -1,0 +1,65 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>disable</Nullable>
+        <AssemblyName>AzureSidekick.Infrastructure</AssemblyName>
+        <RootNamespace>AzureSidekick.Infrastructure</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Core\Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.12" />
+      <PackageReference Include="Azure.Identity" Version="1.10.4" />
+      <PackageReference Include="Azure.ResourceManager" Version="1.10.0" />
+      <PackageReference Include="Azure.ResourceManager.ResourceGraph" Version="1.0.1" />
+      <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.1" />
+      <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+      <PackageReference Include="Microsoft.SemanticKernel" Version="1.1.0" />
+      <PackageReference Include="Microsoft.SemanticKernel.PromptTemplates.Handlebars" Version="1.1.0" />
+      <PackageReference Include="Microsoft.SemanticKernel.Yaml" Version="1.1.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="Plugins\Semantic\General\Rephrase\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\Storage\RecognizeIntent\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\Storage\EntityRecognition\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\Storage\GeneralInformation\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\Storage\StorageAccounts\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\Storage\StorageAccount\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\General\ServiceIntent\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\General\Azure\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\General\Information\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\General\Intent\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Plugins\Semantic\Storage\Intent\index.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+</Project>

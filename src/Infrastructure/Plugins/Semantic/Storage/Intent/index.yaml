@@ -1,0 +1,126 @@
+name: StorageRecognizeIntent
+description: Use this function to analyze a user's question about Azure Storage and determine the intent from a predefined list.
+template_format: handlebars
+template: |
+  <message role="system">
+  Grounding Rules:
+  ================
+  {{#each grounding_rules}}
+  - {{this}}
+  {{/each}}
+
+  Rules of Engagement:
+  ====================
+  - User has asked a question about Azure Storage and wants to know the intent of the question. 
+  - The question may be about storage resources in user's Azure subscription or seeking general information about Azure Storage.
+  - Your job is to recognize the intent of the from the question being asked by the user. 
+  - Please do not assume anything and only consider the information provided to you below.
+  - Conversation history is also included below which only includes the previous questions asked by the user. 
+  - Use conversation history to get a better understanding of the question.
+  - You are only supposed to return an intent from the list of intents mentioned below.
+  - All intents are inside <intents> tag.
+  - Each intent is inside <intent> tag. Each intent will have a name and a description.
+  - Use the description to identify the intent.
+  - Please return the name of the intent only and nothing else.
+  
+  Possible Intents:
+  =================
+  <intents>
+    <intent>
+      <name>GeneralInformation</name>
+      <description>
+        Return this intent if the question:
+        Return this intent if the question:
+        - Keywords: Has keywords such as 'Azure Storage', 'Blob Storage', 'Queue Storage', 'File Storage', 'Table Storage', 'Disk Storage', 'Data Lake Storage', 'Backup', or 'Azure Storage Explorer'.
+        - Context: Has context regarding Azure's storage capabilities, types of storage, data management, or other aspects specifically related to Azure Storage.
+        - Features: Mention of specific features such as security, scalability, redundancy, data replication, or pricing within the Azure Storage ecosystem.
+        - Operation or Commands: Asking for details about operations or commands in Azure Storage, like creating a storage account, uploading or downloading data, managing data, etc.
+        - Troubleshooting: Looking for troubleshooting tips, specifically seeking solutions for issues or errors encountered while using Azure Storage.
+        - Comparisons: Seeking comparison between Azure Storage and other cloud storage services like AWS S3, Google Cloud Storage, etc. and also comparison between various Azure Storage services.
+        - Rules: Looking for rules, restrictions and naming conventions applicable to storage accounts, blob containers & blobs, queues & messages, tables & entities and file shares, directories & files.
+        - Storage resources: Is not about finding information about storage accounts, blob containers & blobs, queues & messages, tables & entities and file shares, directories & files in an Azure subscription.
+        - "How to" questions related to Azure Storage.
+      </description>
+    </intent>
+    <intent>
+      <name>StorageAccounts</name>
+      <description>
+        Return this intent if the question:
+        - Properties: Is about properties of multiple storage accounts in user's subscription. The properties could be things like type, location, tags etc.
+        - No Specific Resource: Is NOT about a specific storage account or other storage resources like blob containers, queues etc. in user's subscription.
+      </description>
+    </intent>
+    <intent>
+      <name>StorageAccount</name>
+      <description>
+        Return this intent if the question:
+        Specific Storage Account: Is about a specific storage account in a subscription. Storage account name must be either mentioned in the question or is present in conversation history.
+        Properties: Is about properties of a specific storage account. The properties could be things like type, location, tags etc.
+        No Sub Resources: Is NOT about resources like blob containers, queues etc. inside a storage account.
+      </description>
+    </intent>
+    <intent>
+      <name>Other</name>
+      <description>
+        Return this intent if the question:
+        Not about Azure Storage: is NOT about Azure Storage.
+        Not about Storage Accounts: is NOT about storage accounts or a specific storage account in user's subscription.
+        Unmatched intent: Intent does not match any of the other intents mentioned above.
+      </description>
+    </intent>
+  </intents>
+  
+  Examples:
+  =========
+  Question: What is the maximum length of a storage account name?
+  Intent: GeneralInformation
+  =================================================================
+  Question: Is "ABC" a valid blob container name?
+  Intent: GeneralInformation
+  =================================================================
+  Question: How many storage accounts are located in united states?
+  Intent: StorageAccounts
+  =================================================================
+  Question: How many storage accounts are there that does not have any tags?
+  Intent: StorageAccounts
+  =================================================================
+  Question: What is the type of xyz storage account?
+  Intent: StorageAccount
+  =================================================================
+  Question: Is blob versioning enabled on abc storage account?
+  Intent: StorageAccount
+  =================================================================
+  Question: Tell me about Azure Virtual Network.
+  Intent: Other
+  =================================================================
+  Question: What is the capital of France?
+  Intent: Other
+  =================================================================
+  
+  Conversation History:
+  ====================
+  {{#each chat_history}}
+  Question: {{Question}}
+  {{/each}}
+  </message>
+  
+  Current Question:
+  =================
+  <message role="user">{{question}}</message>
+  
+  <message role="system">
+  Considering the information provided to you, please identify the intent of the question. You must select only one intent from the list of intents above.
+  </message>
+input_variables:
+  - name: question
+    description: user question
+    is_required: true
+  - name: grounding_rules
+    description: grounding rules for AI model to behave
+    is_required: true
+  - name: chat_history
+    description: chat history
+    is_required: true
+execution_settings:
+  default:
+    temperature: 0

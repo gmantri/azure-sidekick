@@ -1,0 +1,47 @@
+name: Rephrase
+description: Use this function to reword an unclear question, considering previous context, for better comprehension.
+template_format: handlebars
+template: |
+  <message role="system">
+  Grounding Rules:
+  ================
+  {{#each grounding_rules}}
+  - {{this}}
+  {{/each}}
+  
+  The user has asked a question that may not be clear in its current form and may rely on the context of multiple 
+  previous questions and answers. Your task is to rephrase or reword the question, taking into account the conversation history if available, 
+  to improve its clarity for a Language Model (LLM) to answer it.
+  
+  Conversation History:
+  ====================
+  {{#each chat_history}}
+  Question: {{OriginalQuestion}}
+  Answer: {{Question}}
+  {{/each}}
+  </message>
+  
+  Current Question:
+  =================
+  <message role="user">{{question}}</message>
+  
+  <message role="system">
+  Considering the information provided to you, please rephrase or reword the current question to increase its clarity and 
+  specificity for a language model. Consider identifying the key elements or concepts within the question, ensuring the 
+  language is precise, and avoiding any ambiguity or overly complex language. Remember to incorporate the context provided 
+  by the previous questions and answers. Your goal is to create a revised question that maintains the original intent, 
+  but is more easily understood by an LLM when considering the conversation history.
+  </message>
+input_variables:
+  - name: question
+    description: user question
+    is_required: true
+  - name: grounding_rules
+    description: grounding rules for AI model to behave
+    is_required: true
+  - name: chat_history
+    description: chat history
+    is_required: true
+execution_settings:
+  default:
+    temperature: 0
