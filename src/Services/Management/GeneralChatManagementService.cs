@@ -45,7 +45,7 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
                 [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
                 [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
             };
-            var chatResponse = await _genAIRepository.GenerateResponse(question, "General", "Rephrase",
+            var chatResponse = await _genAIRepository.GetResponse(question, "General", "Rephrase",
                 arguments: arguments, operationContext: context);
             return new SuccessOperationResult<ChatResponse>()
             {
@@ -88,13 +88,81 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
                 [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
                 [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
             };
-            var chatResponse = await _genAIRepository.GenerateResponse(question, "General", "Intent",
+            var chatResponse = await _genAIRepository.GetResponse(question, "General", "Intent",
                 arguments: arguments, operationContext: context);
             return new SuccessOperationResult<ChatResponse>()
             {
                 Item = chatResponse,
                 StatusCode = HttpStatusCode.OK
             };
+        }
+        catch (Exception exception)
+        {
+            return Helper.GetFailOperationResultFromException(exception, _logger, context);
+        }
+        finally
+        {
+            _logger?.LogOperation(context);
+        }
+    }
+
+    /// <summary>
+    /// Gets the response of a question based on the question's intent.
+    /// </summary>
+    /// <param name="question">
+    /// User question.
+    /// </param>
+    /// <param name="intent">
+    /// Question's intent.
+    /// </param>
+    /// <param name="chatHistory">
+    /// Chat history.
+    /// </param>
+    /// <param name="operationContext">
+    /// Operation context.
+    /// </param>
+    /// <returns>
+    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
+    /// </returns>
+    public async Task<IOperationResult> GetResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
+        IOperationContext operationContext = default)
+    {
+        var context = new OperationContext("GeneralChatManagementService:GetResponse", $"Get intent. Question: {question}; Intent: {intent}", operationContext);
+        try
+        {
+            IOperationResult result;
+            switch (intent)
+            {
+                case Core.Constants.Intent.Ability:
+                    result = GetPredefinedOperationResult(question,
+                        "I can help you with your questions about Azure.",
+                        Core.Constants.Intent.Ability);;
+                    break;
+                case Core.Constants.Intent.MultipleIntents:
+                    result = GetPredefinedOperationResult(question,
+                        "My apologies, but it seems that you are asking too many things in a single question. Can you please ask one question at a time?",
+                        Core.Constants.Intent.MultipleIntents);
+                    break;
+                case Core.Constants.Intent.Unclear:
+                    result = GetPredefinedOperationResult(question,
+                        "My apologies, but I am not sure I understand the question. Can you please provide more details?",
+                        Core.Constants.Intent.Unclear);
+                    break;
+                case Core.Constants.Intent.Information:
+                    result = await HandleQuestionWithInformationIntent(question, chatHistory,
+                        context);
+                    break;
+                case Core.Constants.Intent.Azure:
+                    result =
+                        await HandleQuestionWithAzureIntent(question, chatHistory, context);
+                    break;
+                default:
+                    result = GetPredefinedOperationResult(question,
+                        "My apologies, but it seems the question is not related to Azure (I may be wrong though). Can you please clarify the question or ask me a question related to Azure.",
+                        Core.Constants.Intent.Other);
+                    break;
+            }
+            return result;
         }
         catch (Exception exception)
         {
@@ -121,10 +189,9 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    public async Task<IOperationResult> HandleQuestionWithAzureIntent(string question, IEnumerable<ChatResponse> chatHistory,
+    private async Task<IOperationResult> HandleQuestionWithAzureIntent(string question, IEnumerable<ChatResponse> chatHistory,
         IOperationContext operationContext = default)
     {
-        var context = new OperationContext("GeneralChatManagementService:HandleQuestionWithAzureIntent", $"Handle question with Azure intent. Question: {question}", operationContext);
         try
         {
             var arguments = new Dictionary<string, object>()
@@ -132,8 +199,8 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
                 [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
                 [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
             };
-            var chatResponse = await _genAIRepository.GenerateResponse(question, "General", "Azure",
-                arguments: arguments, operationContext: context);
+            var chatResponse = await _genAIRepository.GetResponse(question, "General", "Azure",
+                arguments: arguments, operationContext: operationContext);
             return new SuccessOperationResult<ChatResponse>()
             {
                 Item = chatResponse,
@@ -142,42 +209,7 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
         }
         catch (Exception exception)
         {
-            return Helper.GetFailOperationResultFromException(exception, _logger, context);
-        }
-        finally
-        {
-            _logger?.LogOperation(context);
-        }
-    }
-
-    /// <summary>
-    /// Handles question with multiple intents.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    public async Task<IOperationResult> HandleQuestionWithMultipleIntents(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default)
-    {
-        var context = new OperationContext("GeneralChatManagementService:HandleQuestionWithMultipleIntents", $"Handle question with multiple intents. Question: {question}", operationContext);
-        try
-        {
-            return await GetPredefinedOperationResult(question,
-                "My apologies, but it seems that you are asking too many things in a single question. Can you please ask one question at a time?",
-                Core.Constants.Intent.MultipleIntents);
-        }
-        finally
-        {
-            _logger?.LogOperation(context);
+            return Helper.GetFailOperationResultFromException(exception, _logger, operationContext);
         }
     }
 
@@ -199,7 +231,6 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     public async Task<IOperationResult> HandleQuestionWithInformationIntent(string question, IEnumerable<ChatResponse> chatHistory,
         IOperationContext operationContext = default)
     {
-        var context = new OperationContext("GeneralChatManagementService:HandleQuestionWithInformationIntent", $"Handle question with information intent. Question: {question}", operationContext);
         try
         {
             var arguments = new Dictionary<string, object>()
@@ -207,8 +238,8 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
                 [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
                 [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
             };
-            var chatResponse = await _genAIRepository.GenerateResponse(question, "General", "Information",
-                arguments: arguments, operationContext: context);
+            var chatResponse = await _genAIRepository.GetResponse(question, "General", "Information",
+                arguments: arguments, operationContext: operationContext);
             return new SuccessOperationResult<ChatResponse>()
             {
                 Item = chatResponse,
@@ -217,104 +248,7 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
         }
         catch (Exception exception)
         {
-            return Helper.GetFailOperationResultFromException(exception, _logger, context);
-        }
-        finally
-        {
-            _logger?.LogOperation(context);
-        }
-    }
-
-    /// <summary>
-    /// Handles question with ability intent.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    public async Task<IOperationResult> HandleQuestionWithAbilityIntent(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default)
-    {
-        var context = new OperationContext("GeneralChatManagementService:HandleQuestionWithAbilityIntent", $"Handle question with ability intent. Question: {question}", operationContext);
-        try
-        {
-            return await GetPredefinedOperationResult(question,
-                "I can help you with your questions about Azure.",
-                Core.Constants.Intent.Ability);
-        }
-        finally
-        {
-            _logger?.LogOperation(context);
-        }
-    }
-
-    /// <summary>
-    /// Handles question with unclear intent.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    public async Task<IOperationResult> HandleQuestionWithUnclearIntent(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default)
-    {
-        var context = new OperationContext("GeneralChatManagementService:HandleQuestionWithUnclearIntent", $"Handle question with unclear intent. Question: {question}", operationContext);
-        try
-        {
-            return await GetPredefinedOperationResult(question,
-                "My apologies, but I am not sure I understand the question. Can you please provide more details?",
-                Core.Constants.Intent.Unclear);
-        }
-        finally
-        {
-            _logger?.LogOperation(context);
-        }
-    }
-
-    /// <summary>
-    /// Handles question with other intent.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    public async Task<IOperationResult> HandleQuestionWithOtherIntent(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default)
-    {
-        var context = new OperationContext("GeneralChatManagementService:HandleQuestionWithOtherIntent", $"Handle question with other intent. Question: {question}", operationContext);
-        try
-        {
-            return await GetPredefinedOperationResult(question,
-                "My apologies, but it seems the question is not related to Azure (I may be wrong though). Can you please clarify the question or ask me a question related to Azure.",
-                Core.Constants.Intent.Other);
-        }
-        finally
-        {
-            _logger?.LogOperation(context);
+            return Helper.GetFailOperationResultFromException(exception, _logger, operationContext);
         }
     }
 
@@ -333,19 +267,19 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <returns>
     /// Chat result. <see cref="SuccessOperationResult{ChatResponse}"/>.
     /// </returns>
-    private static async Task<IOperationResult> GetPredefinedOperationResult(string question, string response, string intent)
+    private static IOperationResult GetPredefinedOperationResult(string question, string response, string intent)
     {
         var chatResponse = new ChatResponse()
         {
             Question = question,
             Response = response,
-            Intent = Core.Constants.Intent.MultipleIntents
+            Intent = intent
         };
-        var result = await Task.FromResult(new SuccessOperationResult<ChatResponse>()
+        var result = new SuccessOperationResult<ChatResponse>()
         {
             Item = chatResponse,
             StatusCode = HttpStatusCode.OK
-        });
+        };
         return result;
     }
 }

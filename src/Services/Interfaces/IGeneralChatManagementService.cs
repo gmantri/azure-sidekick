@@ -44,10 +44,13 @@ public interface IGeneralChatManagementService
     Task<IOperationResult> GetIntent(string question, IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default);
 
     /// <summary>
-    /// Handles question with Azure intent.
+    /// Gets the response of a question based on the question's intent.
     /// </summary>
     /// <param name="question">
     /// User question.
+    /// </param>
+    /// <param name="intent">
+    /// Question's intent.
     /// </param>
     /// <param name="chatHistory">
     /// Chat history.
@@ -58,95 +61,6 @@ public interface IGeneralChatManagementService
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    Task<IOperationResult> HandleQuestionWithAzureIntent(string question, IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default);
-
-    /// <summary>
-    /// Handles question with multiple intents.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    Task<IOperationResult> HandleQuestionWithMultipleIntents(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default);
-
-    /// <summary>
-    /// Handles question with information intent.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    Task<IOperationResult> HandleQuestionWithInformationIntent(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default);
-
-    /// <summary>
-    /// Handles question with ability intent.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    Task<IOperationResult> HandleQuestionWithAbilityIntent(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default);
-
-    /// <summary>
-    /// Handles question with unclear intent.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    Task<IOperationResult> HandleQuestionWithUnclearIntent(string question, IEnumerable<ChatResponse> chatHistory,
-        IOperationContext operationContext = default);
-
-    /// <summary>
-    /// Handles question with other intent.
-    /// </summary>
-    /// <param name="question">
-    /// User question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
-    /// <param name="operationContext">
-    /// Operation context.
-    /// </param>
-    /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
-    /// </returns>
-    Task<IOperationResult> HandleQuestionWithOtherIntent(string question, IEnumerable<ChatResponse> chatHistory,
+    Task<IOperationResult> GetResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
         IOperationContext operationContext = default);
 }
