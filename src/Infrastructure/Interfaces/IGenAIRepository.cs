@@ -66,7 +66,7 @@ public interface IGenAIRepository
     // Task<ChatResponse> ExecutePrompt(string prompt, string intent, IEnumerable<ChatResponse> chatHistory, IDictionary<string, object> arguments = default, IOperationContext operationContext = default);
 
     /// <summary>
-    /// Generate response to a user's question.
+    /// Get response to a user's question.
     /// </summary>
     /// <param name="question">
     /// User question.
@@ -86,5 +86,5 @@ public interface IGenAIRepository
     /// <returns>
     /// <see cref="ChatResponse"/>.
     /// </returns>
-    Task<ChatResponse> GenerateResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, IOperationContext operationContext = default);
+    Task<ChatResponse> GetResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, IOperationContext operationContext = default);
 }

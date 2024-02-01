@@ -105,7 +105,7 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
             [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
         };
-        return await _genAIRepository.GenerateResponse(question, ServiceName, "Intent", arguments,
+        return await _genAIRepository.GetResponse(question, ServiceName, "Intent", arguments,
             operationContext);
     }
 
@@ -117,7 +117,7 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
             [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
         };
-        return await _genAIRepository.GenerateResponse(question, ServiceName,
+        return await _genAIRepository.GetResponse(question, ServiceName,
             Core.Constants.StorageIntents.GeneralInformation, arguments, operationContext);
     }
 
@@ -149,7 +149,7 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
             [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
         };
-        return await _genAIRepository.GenerateResponse(question, ServiceName,
+        return await _genAIRepository.GetResponse(question, ServiceName,
             Core.Constants.StorageIntents.StorageAccounts, arguments, operationContext);
     }
 
@@ -192,7 +192,7 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
             [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
         };
-        result = await _genAIRepository.GenerateResponse(question, ServiceName,
+        result = await _genAIRepository.GetResponse(question, ServiceName,
             Core.Constants.StorageIntents.StorageAccount, arguments, operationContext);
         result.PromptTokens += promptTokens;
         result.CompletionTokens += completionTokens;
@@ -207,7 +207,7 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
             [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
         };
-        return await _genAIRepository.GenerateResponse(question, ServiceName,
+        return await _genAIRepository.GetResponse(question, ServiceName,
             "EntityRecognition", arguments, operationContext);
     }
 

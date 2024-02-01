@@ -32,7 +32,7 @@ public class GenAIRepository : IGenAIRepository
     }
 
     /// <summary>
-    /// Generate response to a user's question.
+    /// Get response to a user's question.
     /// </summary>
     /// <param name="question">
     /// User question.
@@ -52,7 +52,7 @@ public class GenAIRepository : IGenAIRepository
     /// <returns>
     /// <see cref="ChatResponse"/>.
     /// </returns>
-    public async Task<ChatResponse> GenerateResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, IOperationContext operationContext = default)
+    public async Task<ChatResponse> GetResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, IOperationContext operationContext = default)
     {
         var context = new OperationContext("GenAIRepository:GenerateResponse", $"Generate response. Question: {question}; Plugin: {pluginName}; Function: {functionName}.", operationContext);
         try

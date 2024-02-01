@@ -352,28 +352,13 @@ Here are some commands that you can use:
         switch (intent)
         {
             case Constants.Intent.Ability:
-                result = await _generalChatManagementService.HandleQuestionWithAbilityIntent(question, _chatHistory,
-                    context);
-                break;
             case Constants.Intent.MultipleIntents:
-                result = await _generalChatManagementService.HandleQuestionWithMultipleIntents(question, _chatHistory,
-                    context);
-                break;
             case Constants.Intent.Unclear:
-                result = await _generalChatManagementService.HandleQuestionWithUnclearIntent(question, _chatHistory,
-                    context);
-                break;
             case Constants.Intent.Other:
-                result = await _generalChatManagementService.HandleQuestionWithOtherIntent(question, _chatHistory,
-                    context);
-                break;
             case Constants.Intent.Information:
-                result = await _generalChatManagementService.HandleQuestionWithInformationIntent(question, _chatHistory,
-                    context);
-                break;
             case Constants.Intent.Azure:
-                result =
-                    await _generalChatManagementService.HandleQuestionWithAzureIntent(question, _chatHistory, context);
+                result = await _generalChatManagementService.GetResponse(question, intent, _chatHistory,
+                    context);
                 break;
             default:
                 var azureChatManagementService = _azureChatManagementServiceFactory.GetService(intent);
