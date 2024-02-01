@@ -39,15 +39,7 @@ public class Main
         _selectedSubscription = GetSubscriptionIdAndName(SelectSubscription());
         _chatHistory.Clear();
         Console.WriteLine(@$"
-Please ask questions about storage accounts in ""{_selectedSubscription.subscriptionName} ({_selectedSubscription.subscriptionId})"" subscription.
-Some questions that you can ask are:
-- How many storage accounts do I have in my subscription?
-- How many storage accounts are in USA?
-- What is the type of ""xyz"" storage account?
-
-- If you need to change the subscription, please enter ""change subscription"".
-- To clear chat history, please enter ""clear chat history"".
-- To exit, please enter ""quit"".
+You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscription.subscriptionId})"" subscription.
         ");
         await Chat();
     }
@@ -85,6 +77,11 @@ Some questions that you can ask are:
                     Console.WriteLine("Chat history cleared.");
                     break;
                 }
+                case "help":
+                {
+                    Help();
+                    break;
+                }
                 default:
                 {
                     var context = new OperationContext("Main:Chat", $"Question: {userInput}");
@@ -115,7 +112,9 @@ Some questions that you can ask are:
                         {
                             _chatHistory.Add(result);
                         }
+#if DEBUG
                         Console.WriteLine($"Token usage - Prompt tokens: {promptTokens}; Completion tokens: {completionTokens}");
+#endif
                         result.OriginalQuestion = userInput;
                         _logger?.LogChatResponse(result, context);
                     }
@@ -219,7 +218,21 @@ Some questions that you can ask are:
         var message = @"
 Hello and welcome to Azure Sidekick! 
 
-I am an AI assistant that can answer questions about services in your Azure Subscriptions.
+I am an AI assistant that can answer questions about Azure services and resources in your Azure Subscriptions.
+
+I am still being developed so please do not get frustrated if I am not able to answer all of your questions.
+
+Currently, I can provide answers to:
+- your general questions about Azure.
+- your general questions about Azure Storage.
+- your questions about storage accounts in your Azure subscriptions.
+- your questions about a specific storage account in your Azure subscription.
+
+Here are some commands that you can use:
+- change subscription: Use this command if you need to change the subscription.
+- clear chat history: Use this command to clear chat history.
+- help: Use this command to see help.
+- exit: Use this command to exit the application.
 
 Before you begin:
 =================
@@ -231,6 +244,31 @@ Press any key to continue.
         ";
         Console.WriteLine(message);
         Console.ReadKey();
+    }
+
+    /// <summary>
+    /// Prints help message.
+    /// </summary>
+    private static void Help()
+    {
+        var message = @"
+Hi, I am Azure Sidekick! I am here to answer questions about Azure resources and services in your Azure Subscriptions.
+
+I am still being developed so please do not get frustrated if I am not able to answer all of your questions.
+
+Currently, I can provide answers to:
+- your general questions about Azure.
+- your general questions about Azure Storage.
+- your questions about storage accounts in your Azure subscriptions.
+- your questions about a specific storage account in your Azure subscription.
+
+Here are some commands that you can use:
+- change subscription: Use this command if you need to change the subscription.
+- clear chat history: Use this command to clear chat history.
+- help: Use this command to see this message again.
+- exit: Use this command to exit the application.
+    ";
+        Console.WriteLine(message);
     }
 
     /// <summary>
