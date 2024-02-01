@@ -22,6 +22,7 @@ template: |
   - If the answer cannot be found in the provided data, please reply "My apologies, but I do not have enough information to answer your question.". DO NOT make up an answer.
   - Conversation history is also included below which includes the previous questions and answers. 
   - Use conversation history to get a better understanding of the question.
+  - Since you do not have all the information about user's storage resources in their subscription, please reply by saying "Unfortunately, I do not have access to the information you are looking for. However, you can get this information by [include instructions on how a user can get this information]".
 
   Context
   ========
