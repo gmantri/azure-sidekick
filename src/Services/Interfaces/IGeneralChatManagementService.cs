@@ -7,7 +7,7 @@ namespace AzureSidekick.Services.Interfaces;
 /// <summary>
 /// Interface for general chat operations.
 /// </summary>
-public interface IGeneralChatManagementService
+public interface IGeneralChatManagementService : IChatManagementService
 {
     /// <summary>
     /// Rephrases a question.
@@ -44,7 +44,7 @@ public interface IGeneralChatManagementService
     Task<IOperationResult> GetIntent(string question, IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default);
 
     /// <summary>
-    /// Gets the response of a question based on the question's intent.
+    /// Get the response for a question based on the question's intent.
     /// </summary>
     /// <param name="question">
     /// User question.
@@ -63,4 +63,25 @@ public interface IGeneralChatManagementService
     /// </returns>
     Task<IOperationResult> GetResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
         IOperationContext operationContext = default);
+    
+    /// <summary>
+    /// Get a streaming response for a question based on the question's intent.
+    /// </summary>
+    /// <param name="question">
+    /// User question.
+    /// </param>
+    /// <param name="intent">
+    /// Question's intent.
+    /// </param>
+    /// <param name="chatHistory">
+    /// Chat history.
+    /// </param>
+    /// <param name="state">
+    /// <see cref="StreamingResponseState"/>.
+    /// </param>
+    /// <param name="operationContext">
+    /// Operation context.
+    /// </param>
+    Task GetStreamingResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
+        StreamingResponseState state = default, IOperationContext operationContext = default);
 }

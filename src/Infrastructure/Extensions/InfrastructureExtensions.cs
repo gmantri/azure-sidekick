@@ -17,6 +17,9 @@ public static class InfrastructureExtensions
     /// <param name="services">
     /// <see cref="IServiceCollection"/>.
     /// </param>
+    /// <param name="configuration">
+    /// <see cref="IConfiguration"/>.
+    /// </param>
     /// <returns>
     /// <see cref="IServiceCollection"/>.
     /// </returns>
@@ -31,8 +34,8 @@ public static class InfrastructureExtensions
         services
             .AddSingleton(azureOpenAISettings)
             .AddSingleton(azureOpenAIClient)
-            .AddSingleton<ISubscriptionRepository, SubscriptionRepository>()
-            .AddSingleton<IStorageRepository, StorageRepository>()
+            .AddSingleton<ISubscriptionOperationsRepository, SubscriptionOperationsRepository>()
+            .AddSingleton<IStorageOperationsRepository, StorageOperationsRepository>()
             .AddSingleton<IGenAIRepository, GenAIRepository>();
         return services;
     }

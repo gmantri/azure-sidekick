@@ -16,9 +16,9 @@ namespace AzureSidekick.Services.Management;
 public class SubscriptionManagementService : ISubscriptionManagementService
 {
     /// <summary>
-    /// <see cref="ISubscriptionRepository"/>.
+    /// <see cref="ISubscriptionOperationsRepository"/>.
     /// </summary>
-    private readonly ISubscriptionRepository _subscriptionRepository;
+    private readonly ISubscriptionOperationsRepository _subscriptionOperationsRepository;
 
     /// <summary>
     /// <see cref="ILogger"/>.
@@ -26,17 +26,17 @@ public class SubscriptionManagementService : ISubscriptionManagementService
     private readonly ILogger _logger;
     
     /// <summary>
-    /// Initializes a new instance of <see cref="SubscriptionManagementService"/>.
+    /// Initialize a new instance of <see cref="SubscriptionManagementService"/>.
     /// </summary>
-    /// <param name="subscriptionRepository">
-    /// <see cref="ISubscriptionRepository"/>.
+    /// <param name="subscriptionOperationsRepository">
+    /// <see cref="ISubscriptionOperationsRepository"/>.
     /// </param>
     /// <param name="logger">
     /// <see cref="ILogger"/>.
     /// </param>
-    public SubscriptionManagementService(ISubscriptionRepository subscriptionRepository, ILogger logger)
+    public SubscriptionManagementService(ISubscriptionOperationsRepository subscriptionOperationsRepository, ILogger logger)
     {
-        _subscriptionRepository = subscriptionRepository;
+        _subscriptionOperationsRepository = subscriptionOperationsRepository;
         _logger = logger;
     }
     
@@ -58,7 +58,7 @@ public class SubscriptionManagementService : ISubscriptionManagementService
             new OperationContext("SubscriptionManagementService:ListSubscriptions", "List subscriptions", operationContext);
         try
         {
-            var subscriptions = await _subscriptionRepository.List(credentials, context);
+            var subscriptions = await _subscriptionOperationsRepository.List(credentials, context);
             return new SuccessOperationResult<SubscriptionData>()
             {
                 OperationId = context.OperationId,

@@ -11,7 +11,7 @@ namespace AzureSidekick.Infrastructure.Repository;
 /// <summary>
 /// Class for storage operations.
 /// </summary>
-public class StorageRepository : IStorageRepository
+public class StorageOperationsRepository : IStorageOperationsRepository
 {
     /// <summary>
     /// <see cref="ILogger"/>.
@@ -19,12 +19,12 @@ public class StorageRepository : IStorageRepository
     private readonly ILogger _logger;
     
     /// <summary>
-    /// Initializes a new instance of <see cref="StorageRepository"/>.
+    /// Initialize a new instance of <see cref="StorageOperationsRepository"/>.
     /// </summary>
     /// <param name="logger">
     /// <see cref="ILogger"/>.
     /// </param>
-    public StorageRepository(ILogger logger)
+    public StorageOperationsRepository(ILogger logger)
     {
         _logger = logger;
     }

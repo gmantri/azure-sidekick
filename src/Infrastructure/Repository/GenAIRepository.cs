@@ -1,7 +1,9 @@
+using System.Text;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
 using Azure.AI.OpenAI;
+using AzureSidekick.Core.EventArgs;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Models;
 using AzureSidekick.Infrastructure.Interfaces;
@@ -14,16 +16,48 @@ namespace AzureSidekick.Infrastructure.Repository;
 /// </summary>
 public class GenAIRepository : IGenAIRepository
 {
+    /// <summary>
+    /// <see cref="AzureOpenAISettings"/>.
+    /// </summary>
     private readonly AzureOpenAISettings _azureOpenAISettings;
 
+    /// <summary>
+    /// <see cref="OpenAIClient"/>.
+    /// </summary>
     private readonly OpenAIClient _azureOpenAIClient;
 
+    /// <summary>
+    /// <see cref="ILogger"/>.
+    /// </summary>
     private readonly ILogger _logger;
 
-    private readonly string _generalPromptsPath = Path.Combine("Plugins", "Semantic", "General");
-
+    /// <summary>
+    /// Base directory paths for semantic prompts.
+    /// </summary>
     private readonly string _basePromptsPath = Path.Combine("Plugins", "Semantic");
+        
+    /// <summary>
+    /// <see cref="TaskCompletionSource"/>.
+    /// </summary>
+    private TaskCompletionSource<bool> _tcs;
     
+    /// <summary>
+    /// Event handler for chat response received event.
+    /// </summary>
+    public event EventHandler ChatResponseReceivedEventHandler;
+
+    /// <summary>
+    /// Create an instance of <see cref="GenAIRepository"/>.
+    /// </summary>
+    /// <param name="azureOpenAISettings">
+    /// <see cref="AzureOpenAISettings"/>.
+    /// </param>
+    /// <param name="azureOpenAIClient">
+    /// <see cref="OpenAIClient"/>.
+    /// </param>
+    /// <param name="logger">
+    /// <see cref="ILogger"/>.
+    /// </param>
     public GenAIRepository(AzureOpenAISettings azureOpenAISettings, OpenAIClient azureOpenAIClient, ILogger logger)
     {
         _azureOpenAISettings = azureOpenAISettings;
@@ -32,7 +66,7 @@ public class GenAIRepository : IGenAIRepository
     }
 
     /// <summary>
-    /// Get response to a user's question.
+    /// Get a response to a user's question.
     /// </summary>
     /// <param name="question">
     /// User question.
@@ -54,7 +88,7 @@ public class GenAIRepository : IGenAIRepository
     /// </returns>
     public async Task<ChatResponse> GetResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, IOperationContext operationContext = default)
     {
-        var context = new OperationContext("GenAIRepository:GenerateResponse", $"Generate response. Question: {question}; Plugin: {pluginName}; Function: {functionName}.", operationContext);
+        var context = new OperationContext("GenAIRepository:GetResponse", $"Get response. Question: {question}; Plugin: {pluginName}; Function: {functionName}.", operationContext);
         try
         {
             var kernel = GetKernel();
@@ -63,7 +97,6 @@ public class GenAIRepository : IGenAIRepository
                 new HandlebarsPromptTemplateFactory());
             var openAIPromptSettings = new OpenAIPromptExecutionSettings()
             {
-                ChatSystemPrompt = "You are a truthful AI assistant who is an expert on Azure who answers user's questions about their Azure.",
                 Temperature = 0
             };
             var kernelArguments = new KernelArguments(openAIPromptSettings)
@@ -95,7 +128,7 @@ public class GenAIRepository : IGenAIRepository
         {
             _logger?.LogException(exception, context);
             throw Helper.GetRequestException(exception,
-                "GenAIRepository:GenerateResponse - An error occurred while executing prompt.");
+                "GenAIRepository:GetStreamingResponse - An error occurred while getting response.");
         }
         finally
         {
@@ -103,6 +136,122 @@ public class GenAIRepository : IGenAIRepository
         }
     }
 
+    /// <summary>
+    /// Get a streaming response to a user's question.
+    /// </summary>
+    /// <param name="question">
+    /// User question.
+    /// </param>
+    /// <param name="pluginName">
+    /// Name of the plugin.
+    /// </param>
+    /// <param name="functionName">
+    /// Name of the function.
+    /// </param>
+    /// <param name="arguments">
+    /// Arguments for prompt execution. It will contain the data that will be passed to the prompt template.
+    /// </param>
+    /// <param name="state">
+    /// <see cref="StreamingResponseState"/>.
+    /// </param>
+    /// <param name="operationContext">
+    /// Operation context.
+    /// </param>
+    /// <returns>
+    /// <see cref="ChatResponse"/>.
+    /// </returns>
+    public async Task GetStreamingResponse(string question, string pluginName, string functionName,
+        IDictionary<string, object> arguments = default, StreamingResponseState state = default, IOperationContext operationContext = default)
+    {
+        var context = new OperationContext("GenAIRepository:GetStreamingResponse", $"Get streaming response. Question: {question}; Plugin: {pluginName}; Function: {functionName}.", operationContext);
+        try
+        {
+            var streamingResponseState = state ?? new StreamingResponseState()
+            {
+                OperationContext = context
+            };
+            _tcs = new TaskCompletionSource<bool>();
+            var kernel = GetKernel();
+            var path = Path.Combine(Directory.GetCurrentDirectory(), _basePromptsPath, pluginName, functionName, "index.yaml");
+            var function = kernel.CreateFunctionFromPromptYaml(await File.ReadAllTextAsync(path),
+                new HandlebarsPromptTemplateFactory());
+            var openAIPromptSettings = new OpenAIPromptExecutionSettings()
+            {
+                Temperature = 0
+            };
+            var kernelArguments = new KernelArguments(openAIPromptSettings)
+            {
+                ["question"] = question
+            };
+            if (arguments != null)
+            {
+                foreach (var kvp in arguments)
+                {
+                    kernelArguments.TryAdd(kvp.Key, kvp.Value);
+                }
+            }
+            var result = kernel.InvokeStreamingAsync(function, kernelArguments);
+            StringBuilder responseStringBuilder = new StringBuilder();
+            await foreach (var item in result)
+            {
+                var response = item.ToString();
+                // store the partial response. We will use it in the end to calculate prompt and completion tokens.
+                responseStringBuilder.Append(response);
+                var streamingChatResponse = new ChatResponse()
+                {
+                    Question = question,
+                    Intent = pluginName,
+                    Function = functionName,
+                    Response = response
+                };
+                var streamingResponseEventArgs = new ChatResponseReceivedEventArgs()
+                {
+                    ChatResponse = streamingChatResponse,
+                    IsLastResponse = false,
+                    State = streamingResponseState
+                };
+                RaiseChatResponseReceivedEvent(streamingResponseEventArgs);
+            }
+            //send a dummy chat response to indicate end of response
+            var answer = responseStringBuilder.ToString();
+            var getPromptResult = await GetPrompt(kernel, path, kernelArguments, context);
+            var tokenUsage = CalculateTokensForPromptAndResponse(getPromptResult.prompt ?? question, answer, context);
+            var finalChatResponse = new ChatResponse()
+            {
+                Question = question,
+                Response = answer,
+                PromptTokens = tokenUsage.PromptTokens,
+                CompletionTokens = tokenUsage.CompletionTokens,
+                Intent = pluginName,
+                Function = functionName,
+                StoreInChatHistory = true
+            };
+            var finalResponseEventArgs = new ChatResponseReceivedEventArgs()
+            {
+                ChatResponse = finalChatResponse,
+                IsLastResponse = true,
+                State = streamingResponseState
+            };
+            RaiseChatResponseReceivedEvent(finalResponseEventArgs);
+        }
+        catch (Exception exception)
+        {
+            _logger?.LogException(exception, context);
+            throw Helper.GetRequestException(exception,
+                "GenAIRepository:GetStreamingResponse - An error occurred while getting response.");
+        }
+        finally
+        {
+            _logger?.LogOperation(context);
+        }
+    }
+
+    /// <summary>
+    /// Create <see cref="Kernel"/>.
+    /// </summary>
+    /// <returns>
+    /// <see cref="Kernel"/>;
+    /// </returns>
     private Kernel GetKernel()
     {
         var kernelBuilder = Kernel.CreateBuilder();
@@ -112,13 +261,13 @@ public class GenAIRepository : IGenAIRepository
     }
 
     /// <summary>
-    /// Extracts the token usage from result of a function.
+    /// Extract token usage from result of a function.
     /// </summary>
     /// <param name="result">
     /// <see cref="FunctionResult"/>.
     /// </param>
     /// <returns>
-    /// A tuple containing consumed input tokens (1st parameter) and output tokens (2nd parameter).
+    /// A tuple containing consumed prompt tokens (1st parameter) and completion tokens (2nd parameter).
     /// </returns>
     private (int PromptTokens, int CompletionTokens) ExtractTokensFromFunctionResult(FunctionResult result)
     {
@@ -130,6 +279,94 @@ public class GenAIRepository : IGenAIRepository
         if (usage == null) return (promptTokens, completionTokens);
         promptTokens = usage.PromptTokens;
         completionTokens = usage.CompletionTokens;
-        return (promptTokens, completionTokens);
+        return (PromptTokens: promptTokens, CompletionTokens: completionTokens);
+    }
+
+    /// <summary>
+    /// Calculate tokens for the question and answer. 
+    /// </summary>
+    /// <param name="prompt">
+    /// Prompt that is sent to LLM.
+    /// </param>
+    /// <param name="response">
+    /// LLM's response.
+    /// </param>
+    /// <param name="operationContext">
+    /// <see cref="IOperationContext"/>.
+    /// </param>
+    /// <returns>
+    /// A tuple containing consumed prompt tokens (1st parameter) and completion tokens (2nd parameter).
+    /// </returns>
+    private (int PromptTokens, int CompletionTokens) CalculateTokensForPromptAndResponse(string prompt, string response, IOperationContext operationContext)
+    {
+        try
+        {
+            var promptTokens = 0;
+            var completionTokens = 0;
+            var encodingForModel = Tiktoken.Encoding.TryForModel(_azureOpenAISettings.ModelType);
+            if (encodingForModel == null) return (PromptTokens: promptTokens, CompletionTokens: completionTokens);
+            promptTokens = encodingForModel.CountTokens(prompt);
+            completionTokens = encodingForModel.CountTokens(response);
+            return (PromptTokens: promptTokens, CompletionTokens: completionTokens);
+        }
+        catch (Exception exception)
+        {
+            _logger?.LogException(exception, operationContext);
+            return (PromptTokens: 0, CompletionTokens: 0);
+        }
+    }
+    
+    /// <summary>
+    /// Raise chat response received event.
+    /// </summary>
+    /// <param name="args">
+    /// <see cref="ChatResponseReceivedEventArgs"/>.
+    /// </param>
+    private void RaiseChatResponseReceivedEvent(ChatResponseReceivedEventArgs args)
+    {
+        ChatResponseReceivedEventHandler?.Invoke(this, args);
+        if (args.IsLastResponse)
+        {
+            _tcs.SetResult(true);
+        }
+    }
+
+    /// <summary>
+    /// Get the prompt from the prompt template.
+    /// </summary>
+    /// <param name="kernel">
+    /// <see cref="Kernel"/>.
+    /// </param>
+    /// <param name="promptFilePath">
+    /// Prompt file path.
+    /// </param>
+    /// <param name="kernelArguments">
+    /// <see cref="KernelArguments"/>.
+    /// </param>
+    /// <param name="operationContext">
+    /// <see cref="IOperationContext"/>.
+    /// </param>
+    /// <returns>
+    /// A tuple containing prompt (1st parameter) and any exception (2nd parameter).
+    /// </returns>
+    private async Task<(string prompt, Exception exception)> GetPrompt(Kernel kernel, string promptFilePath, KernelArguments kernelArguments,
+        IOperationContext operationContext)
+    {
+        try
+        {
+            var promptFileContents = await File.ReadAllTextAsync(promptFilePath);
+            var promptTemplateConfig = KernelFunctionYaml.ToPromptTemplateConfig(promptFileContents);
+            // var promptTemplateConfig = new PromptTemplateConfig(promptFileContents);
+            var factory = new HandlebarsPromptTemplateFactory();
+            if (!factory.TryCreate(promptTemplateConfig, out var promptTemplate)) return (string.Empty, new InvalidOperationException("Unable to create prompt template."));
+
+            var prompt = await promptTemplate.RenderAsync(kernel, kernelArguments);
+            return (prompt, null);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogException(exception, operationContext);
+            return (string.Empty, exception);
+        }
     }
 }

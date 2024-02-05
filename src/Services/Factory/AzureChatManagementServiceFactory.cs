@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AzureSidekick.Services.Factory;
 
 /// <summary>
-/// Factory interface to work with Azure service-specific chat. Responsible for returning
+/// Factory to work with Azure service-specific chat. Responsible for returning
 /// appropriate Azure related chat management service.
 /// </summary>
 public class AzureChatManagementServiceFactory : IAzureChatManagementServiceFactory
@@ -15,7 +15,7 @@ public class AzureChatManagementServiceFactory : IAzureChatManagementServiceFact
     private readonly IServiceProvider _provider;
     
     /// <summary>
-    /// Initializes a new instance of AzureChatManagementServiceFactory.
+    /// Initialize a new instance of AzureChatManagementServiceFactory.
     /// </summary>
     /// <param name="provider">
     /// <see cref="IServiceProvider"/>.
@@ -26,7 +26,7 @@ public class AzureChatManagementServiceFactory : IAzureChatManagementServiceFact
     }
 
     /// <summary>
-    /// Gets a service-specific implementation of <see cref="IAzureChatManagementService"/>.
+    /// Get a service-specific implementation of <see cref="IAzureChatManagementService"/>.
     /// </summary>
     /// <param name="serviceName">
     /// Name of Azure service e.g. Storage, CosmosDB etc.

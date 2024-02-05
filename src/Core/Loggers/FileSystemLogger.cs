@@ -7,7 +7,7 @@ namespace AzureSidekick.Core.Loggers;
 
 /// <summary>
 /// ILogger implementation for storing logs and exceptions on local file system.
-/// The logs are stored in the "temp" directory of the logged in user under "AzureStorageCopilot"
+/// The logs are stored in the "temp" directory of the logged in user under "AzureSidekick"
 /// folder. For each day, a new directory will be created in "yyyy-MM-dd" pattern and that will
 /// contain the data files (logs.csv for logs and errors.csv for errors).
 /// </summary>
@@ -52,7 +52,7 @@ public class FileSystemLogger : ILogger
     }
 
     /// <summary>
-    /// Logs an operation and saves it to a local file. Creates the file if it does not exist.
+    /// Log operation and saves it to a local file. Creates the file if it does not exist.
     /// </summary>
     /// <param name="operationContext">
     /// <see cref="IOperationContext"/>.
@@ -71,7 +71,7 @@ public class FileSystemLogger : ILogger
     }
 
     /// <summary>
-    /// Logs an exception and saves it to a local file. Creates the file if it does not exist.
+    /// Log exception and saves it to a local file. Creates the file if it does not exist.
     /// </summary>
     /// <param name="exception">
     /// <see cref="Exception"/>.
@@ -94,7 +94,7 @@ public class FileSystemLogger : ILogger
 
 
     /// <summary>
-    /// Logs the chat response.
+    /// Log chat response and send it to Application Insights..
     /// </summary>
     /// <param name="response">
     /// <see cref="ChatResponse"/>.
@@ -102,21 +102,27 @@ public class FileSystemLogger : ILogger
     /// <param name="operationContext">
     /// <see cref="IOperationContext"/>.
     /// </param>
-    public void LogChatResponse(ChatResponse response, IOperationContext operationContext)
+    public void LogChatResponse(ChatResponse response, IOperationContext operationContext = default)
     {
         if (!File.Exists(_chatResponseLogFile))
         {
             using var fs = File.Create(_chatResponseLogFile);
             fs.Write(Encoding.UTF8.GetBytes(ChatResponseLogFileHeader));
         }
-        operationContext.EndTime = DateTime.UtcNow;
+
+        var operationId = string.Empty;
+        if (operationContext != null)
+        {
+            operationContext.EndTime = DateTime.UtcNow;
+            operationId = operationContext.OperationId;
+        }
         using var sw = File.AppendText(_logFile);
-        sw.Write($"\"{operationContext.OperationId}\",\"{response.OriginalQuestion.EscapeDoubleQuotes()}\",\"{response.Question.EscapeDoubleQuotes()}\",\"{response.Response.EscapeDoubleQuotes()}\",\"{response.Intent.EscapeDoubleQuotes()}\",\"{response.Function.EscapeDoubleQuotes()}\",\"{response.PromptTokens}\",\"{response.CompletionTokens}\"");
+        sw.Write($"\"{operationId}\",\"{response.OriginalQuestion.EscapeDoubleQuotes()}\",\"{response.Question.EscapeDoubleQuotes()}\",\"{response.Response.EscapeDoubleQuotes()}\",\"{response.Intent.EscapeDoubleQuotes()}\",\"{response.Function.EscapeDoubleQuotes()}\",\"{response.PromptTokens}\",\"{response.CompletionTokens}\"");
         sw.Write(Environment.NewLine);
     }
 
     /// <summary>
-    /// Creates the directories for storing logs if it does not exist.
+    /// Create directories for storing logs if it they do not exist.
     /// </summary>
     private void Initialize()
     {

@@ -12,7 +12,7 @@ namespace AzureSidekick.Infrastructure.Repository;
 /// <summary>
 /// Class for subscription operations.
 /// </summary>
-public class SubscriptionRepository : ISubscriptionRepository
+public class SubscriptionOperationsRepository : ISubscriptionOperationsRepository
 {
     /// <summary>
     /// <see cref="ILogger"/>.
@@ -20,12 +20,12 @@ public class SubscriptionRepository : ISubscriptionRepository
     private readonly ILogger _logger;
     
     /// <summary>
-    /// Initializes a new instance of <see cref="SubscriptionRepository"/>.
+    /// Initialize a new instance of <see cref="SubscriptionOperationsRepository"/>.
     /// </summary>
     /// <param name="logger">
     /// <see cref="ILogger"/>.
     /// </param>
-    public SubscriptionRepository(ILogger logger)
+    public SubscriptionOperationsRepository(ILogger logger)
     {
         _logger = logger;
     }

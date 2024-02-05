@@ -7,7 +7,7 @@ namespace AzureSidekick.Services.Interfaces;
 public interface IAzureChatManagementServiceFactory
 {
     /// <summary>
-    /// Gets a service-specific implementation of <see cref="IAzureChatManagementService"/>.
+    /// Get a service-specific implementation of <see cref="IAzureChatManagementService"/>.
     /// </summary>
     /// <param name="serviceName">
     /// Name of Azure service e.g. Storage, CosmosDB etc.
