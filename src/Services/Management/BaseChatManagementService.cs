@@ -4,15 +4,33 @@ namespace AzureSidekick.Services.Management;
 
 public abstract class BaseChatManagementService
 {
-    protected int MaxChatHistoryItems = 5;
+    /// <summary>
+    /// Maximum number of items that can be sent to LLM as chat history. 
+    /// </summary>
+    protected readonly int MaxChatHistoryItems = 5;
 
+    /// <summary>
+    /// Trim chat history by removing items more than <see cref="MaxChatHistoryItems"/>.
+    /// </summary>
+    /// <param name="chatHistory"></param>
+    /// <returns>
+    /// Trimmed chat history.
+    /// </returns>
     protected virtual IEnumerable<ChatResponse> TrimChatHistory(IEnumerable<ChatResponse> chatHistory)
     {
         var chatHistoryItems = chatHistory == null ? new List<ChatResponse>() : chatHistory.ToList();
-        chatHistoryItems = chatHistoryItems.Take(Math.Min(chatHistoryItems.Count, MaxChatHistoryItems)).ToList();
-        return chatHistoryItems;
+        chatHistoryItems.Reverse();
+        var partialChatHistoryItems = chatHistoryItems.Take(Math.Min(chatHistoryItems.Count, MaxChatHistoryItems)).ToList();
+        partialChatHistoryItems.Reverse();
+        return partialChatHistoryItems;
     }
     
+    /// <summary>
+    /// Get grounding rules for LLM. These will be the part of system prompt.
+    /// </summary>
+    /// <returns>
+    /// Grounding rules for LLM.
+    /// </returns>
     protected virtual List<string> GetGroundingRules()
     {
         return new List<string>()
@@ -25,6 +43,24 @@ public abstract class BaseChatManagementService
             "Provide precise and concise responses. Maintain a respectful and professional tone in all interactions.",  
             "Wait for the user's question before providing information. Stay within your domain of expertise - Azure and related services.",  
             "Ensure responses are up-to-date and accessible. Avoid unnecessary jargon and technical language when possible."          
+        };
+    }
+    
+    /// <summary>
+    /// Get default chat arguments. Includes grounding rules and trimmed chat history.
+    /// </summary>
+    /// <param name="chatHistory">
+    /// Chat history.
+    /// </param>
+    /// <returns>
+    /// Dictionary of chat arguments.
+    /// </returns>
+    protected virtual IDictionary<string, object> GetDefaultChatArguments(IEnumerable<ChatResponse> chatHistory)
+    {
+        return new Dictionary<string, object>()
+        {
+            [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
+            [Constants.ChatArguments.ChatHistory] = TrimChatHistory(chatHistory)
         };
     }
 }

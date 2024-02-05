@@ -8,7 +8,7 @@ namespace AzureSidekick.Services.Utilities;
 internal static class Helper
 {
     /// <summary>
-    /// Gets the failure operation result from exception.
+    /// Get the failure operation result from exception.
     /// </summary>
     /// <param name="exception">
     /// <see cref="Exception"/>.
@@ -20,7 +20,7 @@ internal static class Helper
     /// <see cref="IOperationContext"/>.
     /// </param>
     /// <returns>
-    /// <see cref="IOperationResult"/>.
+    /// <see cref="FailOperationResult"/>.
     /// </returns>
     internal static IOperationResult GetFailOperationResultFromException(Exception exception, ILogger logger,
         IOperationContext context)

@@ -7,7 +7,7 @@ namespace AzureSidekick.Infrastructure.Interfaces;
 /// <summary>
 /// Interface for subscription related operations.
 /// </summary>
-public interface ISubscriptionRepository
+public interface ISubscriptionOperationsRepository
 {
     /// <summary>
     /// List subscriptions signed-in user has access to.

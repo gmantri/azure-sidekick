@@ -35,5 +35,5 @@ public interface ILogger
     /// <param name="operationContext">
     /// <see cref="IOperationContext"/>.
     /// </param>
-    void LogChatResponse(ChatResponse response, IOperationContext operationContext);
+    void LogChatResponse(ChatResponse response, IOperationContext operationContext = default);
 }

@@ -1,12 +1,11 @@
 name: GeneralAzure
-description: Use this tool when the intent of the question is "Azure".
+description: Use this function when the user has a general question about Azure.
 template_format: handlebars
 template: |
   <message role="system">
   {{#each grounding_rules}}
   - {{this}}
   {{/each}}
-  
   
   Rules of Engagement:
   ====================

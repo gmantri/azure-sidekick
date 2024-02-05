@@ -11,10 +11,13 @@ using AzureSidekick.Core.Exceptions;
 
 namespace AzureSidekick.Infrastructure.Utilities;
 
+/// <summary>
+/// Helper methods.
+/// </summary>
 internal static class Helper
 {
     /// <summary>
-    /// Executes a resource graph query and returns the result.
+    /// Execute a resource graph query and returns the result.
     /// </summary>
     /// <param name="subscriptionId">
     /// Subscription id.
@@ -88,6 +91,18 @@ internal static class Helper
         return tenantResource;
     }
     
+    /// <summary>
+    /// Get <see cref="RequestException"/> from an exception.
+    /// </summary>
+    /// <param name="exception">
+    /// <see cref="Exception"/>.
+    /// </param>
+    /// <param name="message">
+    /// Custom error message.
+    /// </param>
+    /// <returns>
+    /// <see cref="RequestException"/>.
+    /// </returns>
     internal static RequestException GetRequestException(Exception exception, string message = default)
     {
         var statusCode = HttpStatusCode.InternalServerError;

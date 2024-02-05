@@ -3,9 +3,9 @@
 Azure Sidekick is an AI assistant that can answer questions about the resources in your Azure subscriptions. 
 You can also use this to ask questions about Azure as well.
 
-## Supported Azure Services
+## Supported Scenarios
 
-Currently following Azure services are supported:
+- General questions about Azure.
 - Azure Storage
   - General Azure storage questions
   - Questions about storage accounts in your Azure Subscription e.g. How many storage accounts do not have tags?
@@ -22,14 +22,15 @@ credentials from there.
 Look for `appsettings.template.json` file either in the `src\ConsoleUI` directory (if you are running this in an IDE)
 or in the directory where you downloaded and unzipped the binaries (if you are running the executable directly).
 
-Rename that file to `appsettings.json` and provide the values for your Azure OpenAI deployments.
+Rename that file to `appsettings.json` and provide the values for your Azure OpenAI deployment.
 
 ```json
 {
   "AzureOpenAISettings": {
     "Endpoint": "Azure OpenAI service endpoint e.g. https://xyz.openai.azure.com/>",
     "Key": "Azure OpenAI service key e.g. xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "DeploymentId": "Azure OpenAI model deployment id e.g. gpt-4-32k"
+    "DeploymentId": "Azure OpenAI model deployment id e.g. gpt-4-32k",
+    "ModelType": "Azure OpenAI model type - should be gpt-4, gpt-3.5-turbo or gpt-35-turbo. Needed for token calculation."
   }
 }
 ```

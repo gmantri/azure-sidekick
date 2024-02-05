@@ -23,7 +23,7 @@ public static class ServiceExtensions
         var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger>();
         var genAIRepository = provider.GetRequiredService<IGenAIRepository>();
-        var storageRepository = provider.GetRequiredService<IStorageRepository>();
+        var storageRepository = provider.GetRequiredService<IStorageOperationsRepository>();
 
         IAzureChatManagementService storageChatManagementService =
             new AzureStorageChatManagementService(genAIRepository, storageRepository, logger);

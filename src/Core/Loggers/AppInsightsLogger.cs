@@ -16,7 +16,7 @@ public class AppInsightsLogger : ILogger
     private readonly TelemetryClient _telemetryClient;
     
     /// <summary>
-    /// Initializes a new instance of <see cref="AppInsightsLogger"/>.
+    /// Initialize a new instance of <see cref="AppInsightsLogger"/>.
     /// </summary>
     /// <param name="telemetryClient">
     /// <see cref="TelemetryClient"/>.
@@ -27,7 +27,7 @@ public class AppInsightsLogger : ILogger
     }
 
     /// <summary>
-    /// Log an exception and send it to Application Insights.
+    /// Log exception and send it to Application Insights.
     /// </summary>
     /// <param name="exception">
     /// <see cref="Exception"/>.
@@ -62,7 +62,7 @@ public class AppInsightsLogger : ILogger
     }
 
     /// <summary>
-    /// Logs the chat response.
+    /// Log chat response and send it to Application Insights.
     /// </summary>
     /// <param name="response">
     /// <see cref="ChatResponse"/>.
@@ -70,16 +70,16 @@ public class AppInsightsLogger : ILogger
     /// <param name="operationContext">
     /// <see cref="IOperationContext"/>.
     /// </param>
-    public void LogChatResponse(ChatResponse response, IOperationContext operationContext)
+    public void LogChatResponse(ChatResponse response, IOperationContext operationContext = default)
     {
         var traceTelemetry = new TraceTelemetry()
         {
             Message = $"Question: {response.OriginalQuestion}{Environment.NewLine}Revised Question: {response.Question}{Environment.NewLine}Response: {response.Response}"
         };
-        traceTelemetry.Context.Operation.Id = operationContext.OperationId;
-        traceTelemetry.Context.Operation.ParentId = operationContext.ParentOperationId;
-        traceTelemetry.Context.Operation.Name = operationContext.OperationName;
-        traceTelemetry.Context.User.Id = operationContext.UserId;
+        traceTelemetry.Context.Operation.Id = operationContext?.OperationId;
+        traceTelemetry.Context.Operation.ParentId = operationContext?.ParentOperationId;
+        traceTelemetry.Context.Operation.Name = operationContext?.OperationName;
+        traceTelemetry.Context.User.Id = operationContext?.UserId;
         traceTelemetry.Properties.Add("Question", response.OriginalQuestion);
         traceTelemetry.Properties.Add("RevisedQuestion", response.Question);
         traceTelemetry.Properties.Add("Response", response.Response);
@@ -90,7 +90,7 @@ public class AppInsightsLogger : ILogger
     }
 
     /// <summary>
-    /// Log an operation and send it to Application Insights.
+    /// Log operation and send it to Application Insights.
     /// </summary>
     /// <param name="operationContext">
     /// <see cref="IOperationContext"/>.

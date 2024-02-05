@@ -7,7 +7,7 @@ namespace AzureSidekick.Infrastructure.Interfaces;
 /// <summary>
 /// Interface for storage related operations.
 /// </summary>
-public interface IStorageRepository
+public interface IStorageOperationsRepository
 {
     /// <summary>
     /// List storage accounts in a subscription a user has access to.

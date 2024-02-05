@@ -1,5 +1,6 @@
 using Azure.ResourceManager.Resources;
 using AzureSidekick.Core;
+using AzureSidekick.Core.EventArgs;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Models;
 using AzureSidekick.Core.OperationResults;
@@ -9,20 +10,61 @@ namespace AzureSidekick.ConsoleUI;
 
 public class Main
 {
+    /// <summary>
+    /// <see cref="ISubscriptionManagementService"/>.
+    /// </summary>
     private readonly ISubscriptionManagementService _subscriptionManagementService;
 
+    /// <summary>
+    /// <see cref="IGeneralChatManagementService"/>.
+    /// </summary>
     private readonly IGeneralChatManagementService _generalChatManagementService;
 
+    /// <summary>
+    /// <see cref="IAzureChatManagementServiceFactory"/>.
+    /// </summary>
     private readonly IAzureChatManagementServiceFactory _azureChatManagementServiceFactory;
 
+    /// <summary>
+    /// <see cref="ILogger"/>.
+    /// </summary>
     private readonly ILogger _logger;
 
+    /// <summary>
+    /// List of subscriptions logged-in user has access to.
+    /// </summary>
     private IEnumerable<SubscriptionData> _subscriptions;
 
+    /// <summary>
+    /// Currently selected subscription.
+    /// </summary>
     private (string subscriptionId, string subscriptionName) _selectedSubscription = ("", "");
 
+    /// <summary>
+    /// Chat history.
+    /// </summary>
     private readonly List<ChatResponse> _chatHistory = new List<ChatResponse>();
+
+    /// <summary>
+    /// Indicates if the response should be streamed or not (default is true).
+    /// </summary>
+    private bool _getStreamingResponse = true;
     
+    /// <summary>
+    /// Initialize an instance of <see cref="Main"/>.
+    /// </summary>
+    /// <param name="subscriptionManagementService">
+    /// <see cref="ISubscriptionManagementService"/>.
+    /// </param>
+    /// <param name="generalChatManagementService">
+    /// <see cref="IGeneralChatManagementService"/>.
+    /// </param>
+    /// <param name="azureChatManagementServiceFactory">
+    /// <see cref="IAzureChatManagementServiceFactory"/>.
+    /// </param>
+    /// <param name="logger">
+    /// <see cref="ILogger"/>.
+    /// </param>
     public Main(ISubscriptionManagementService subscriptionManagementService, IGeneralChatManagementService generalChatManagementService, IAzureChatManagementServiceFactory azureChatManagementServiceFactory, ILogger logger)
     {
         _subscriptionManagementService = subscriptionManagementService;
@@ -31,6 +73,12 @@ public class Main
         _logger = logger;
     }
     
+    /// <summary>
+    /// Run the application.
+    /// </summary>
+    /// <param name="args">
+    /// Application arguments.
+    /// </param>
     public async Task Run(string[] args)
     {
         Welcome();
@@ -59,6 +107,7 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
             userInput = userInput.Trim();
             switch (userInput.ToLower())
             {
+                case "exit":
                 case "quit":
                 {
                     continueLoop = false;
@@ -77,6 +126,12 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
                     Console.WriteLine("Chat history cleared.");
                     break;
                 }
+                case "toggle response mode":
+                {
+                    _getStreamingResponse = !_getStreamingResponse;
+                    Console.WriteLine(_getStreamingResponse ? "Response will be streamed." : "Response will not be streamed.");
+                    break;
+                }
                 case "help":
                 {
                     Help();
@@ -87,40 +142,55 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
                     var context = new OperationContext("Main:Chat", $"Question: {userInput}");
                     try
                     {
+                        var state = new StreamingResponseState()
+                        {
+                            UserInput = userInput
+                        };
                         int promptTokens = 0, completionTokens = 0;
                         // first rephrase the question.
                         var result = await GetRephrasedQuestion(userInput, context);
 #if DEBUG
                         Console.WriteLine($"Rephrased question: {result.Response}");
 #endif
+                        state.PromptTokens += result.PromptTokens;
+                        state.CompletionTokens += result.CompletionTokens;
                         promptTokens += result.PromptTokens;
                         completionTokens += result.CompletionTokens;
                         var question = result.Response;
                         // now let's get the service intent
                         result = await GetIntent(question, context);
+                        state.PromptTokens += result.PromptTokens;
+                        state.CompletionTokens += result.CompletionTokens;
                         promptTokens += result.PromptTokens;
                         completionTokens += result.CompletionTokens;
                         var intent = result.Response;
 #if DEBUG
                         Console.WriteLine($"Question intent: {intent}");
 #endif
-                        result = await ProcessQuestion(question, intent, context);
-                        promptTokens += result.PromptTokens;
-                        completionTokens += result.CompletionTokens;
-                        Console.WriteLine($"Answer: {result.Response}");
-                        if (result.StoreInChatHistory)
+                        if (_getStreamingResponse)
                         {
-                            _chatHistory.Add(result);
+                            await GetStreamingResponse(question, intent, state, context);
                         }
+                        else
+                        {
+                            result = await GetResponse(question, intent, context);
+                            promptTokens += result.PromptTokens;
+                            completionTokens += result.CompletionTokens;
+                            Console.WriteLine(result.Response);
+                            if (result.StoreInChatHistory)
+                            {
+                                _chatHistory.Add(result);
+                            }
 #if DEBUG
                         Console.WriteLine($"Token usage - Prompt tokens: {promptTokens}; Completion tokens: {completionTokens}");
 #endif
-                        result.OriginalQuestion = userInput;
-                        _logger?.LogChatResponse(result, context);
+                            result.OriginalQuestion = userInput;
+                            _logger?.LogChatResponse(result, context);
+                        }
                     }
                     catch (Exception exception)
                     {
-                        Console.WriteLine(exception.Message);
+                        Console.WriteLine("An error occurred while processing request. Please see error log for more details.");
                     }
                     finally
                     {
@@ -211,7 +281,7 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
     }
 
     /// <summary>
-    /// Prints welcome message.
+    /// Print welcome message.
     /// </summary>
     private static void Welcome()
     {
@@ -231,8 +301,9 @@ Currently, I can provide answers to:
 Here are some commands that you can use:
 - change subscription: Use this command if you need to change the subscription.
 - clear chat history: Use this command to clear chat history.
+- toggle response mode: Use this command to toggle the response mode between streaming (default, recommended) and non-streaming.
 - help: Use this command to see help.
-- exit: Use this command to exit the application.
+- exit or quit: Use either of these commands to exit the application.
 
 Before you begin:
 =================
@@ -247,7 +318,7 @@ Press any key to continue.
     }
 
     /// <summary>
-    /// Prints help message.
+    /// Print help message.
     /// </summary>
     private static void Help()
     {
@@ -265,14 +336,15 @@ Currently, I can provide answers to:
 Here are some commands that you can use:
 - change subscription: Use this command if you need to change the subscription.
 - clear chat history: Use this command to clear chat history.
+- toggle response mode: Use this command to toggle the response mode between streaming (default, recommended) and non-streaming.
 - help: Use this command to see this message again.
-- exit: Use this command to exit the application.
+- exit or quit: Use either of these commands to exit the application.
     ";
         Console.WriteLine(message);
     }
 
     /// <summary>
-    /// Extracts the subscription id and name.
+    /// Extract the subscription id and name.
     /// </summary>
     /// <param name="subscription">
     /// <see cref="SubscriptionData"/>.
@@ -346,7 +418,7 @@ Here are some commands that you can use:
     /// <see cref="ChatResponse"/>.
     /// </returns>
     /// <exception cref="Exception"></exception>
-    private async Task<ChatResponse> ProcessQuestion(string question, string intent, IOperationContext context)
+    private async Task<ChatResponse> GetResponse(string question, string intent, IOperationContext context)
     {
         IOperationResult result;
         switch (intent)
@@ -362,12 +434,108 @@ Here are some commands that you can use:
                 break;
             default:
                 var azureChatManagementService = _azureChatManagementServiceFactory.GetService(intent);
-                result = await azureChatManagementService.ProcessQuestion(_selectedSubscription.subscriptionId,
+                result = await azureChatManagementService.GetResponse(_selectedSubscription.subscriptionId,
                     question, _chatHistory, operationContext: context);
                 break;
         }
         if (!result.IsOperationSuccessful) throw result.Error;
         var successResult = (SuccessOperationResult<ChatResponse>)result;
         return successResult.Item;
+    }
+
+    /// <summary>
+    /// Answer the question based on the intent in a streaming manner.
+    /// </summary>
+    /// <param name="question">
+    /// User's question.
+    /// </param>
+    /// <param name="intent">
+    /// Intent of the question.
+    /// </param>
+    /// <param name="context">
+    /// <see cref="IOperationContext"/>.
+    /// </param>
+    /// <returns>
+    /// <see cref="ChatResponse"/>.
+    /// </returns>
+    /// <exception cref="Exception"></exception>
+    private async Task GetStreamingResponse(string question, string intent, StreamingResponseState state, IOperationContext context)
+    {
+        switch (intent)
+        {
+            case Constants.Intent.Ability:
+            case Constants.Intent.MultipleIntents:
+            case Constants.Intent.Unclear:
+            case Constants.Intent.Other:
+            case Constants.Intent.Information:
+            case Constants.Intent.Azure:
+            {
+                _generalChatManagementService.OperationResultReceivedEventHandler -= HandleOperationResultReceivedEvent;
+                _generalChatManagementService.OperationResultReceivedEventHandler += HandleOperationResultReceivedEvent;
+                await _generalChatManagementService.GetStreamingResponse(
+                    question: question, 
+                    intent: intent, 
+                    chatHistory: _chatHistory,
+                    state: state, 
+                    operationContext: context);
+                break;
+            }
+            default:
+                var azureChatManagementService = _azureChatManagementServiceFactory.GetService(intent);
+                azureChatManagementService.OperationResultReceivedEventHandler -= HandleOperationResultReceivedEvent;
+                azureChatManagementService.OperationResultReceivedEventHandler += HandleOperationResultReceivedEvent;
+                await azureChatManagementService.GetStreamingResponse(
+                    subscriptionId: _selectedSubscription.subscriptionId, 
+                    question: question, 
+                    chatHistory: _chatHistory,
+                    state: state, 
+                    operationContext: context);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Operation result received event handler.
+    /// </summary>
+    /// <param name="sender">
+    /// Event sender.
+    /// </param>
+    /// <param name="args">
+    /// Event arguments.
+    /// </param>
+    private void HandleOperationResultReceivedEvent(object sender, EventArgs args)
+    {
+        var eventArgs = (OperationResultReceivedEventArgs)args;
+        var operationResult = eventArgs.OperationResult;
+        if (!operationResult.IsOperationSuccessful)
+        {
+            Console.WriteLine("An error occurred while processing request. Please see error log for more details.");
+        }
+        else
+        {
+            var successResult = (SuccessOperationResult<ChatResponse>)operationResult;
+            var chatResponse = successResult.Item;
+            if (!eventArgs.IsLastResponse)
+            {
+                Console.Write(chatResponse.Response);
+            }
+            else
+            {
+                Console.WriteLine();
+                var state = eventArgs.State;
+                var promptTokens = chatResponse.PromptTokens + state.PromptTokens;
+                var completionTokens = chatResponse.CompletionTokens + state.CompletionTokens;
+#if DEBUG
+                Console.WriteLine($"Token usage - Prompt tokens: {promptTokens}; Completion tokens: {completionTokens}");
+#endif
+                chatResponse.OriginalQuestion = eventArgs.State.UserInput;
+                if (chatResponse.StoreInChatHistory)
+                {
+                    _chatHistory.Add(chatResponse);
+                }
+                _logger?.LogChatResponse(chatResponse, eventArgs.State.OperationContext);
+                Console.WriteLine("");
+            }
+        }
     }
 }

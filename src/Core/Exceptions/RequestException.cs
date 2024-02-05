@@ -7,10 +7,13 @@ namespace AzureSidekick.Core.Exceptions;
 /// </summary>
 public class RequestException : Exception
 {
+    /// <summary>
+    /// <see cref="HttpStatusCode"/>.
+    /// </summary>
     public HttpStatusCode StatusCode { get; }
     
     /// <summary>
-    /// Initializes a new instance of <see cref="RequestException"/>.
+    /// Initialize a new instance of <see cref="RequestException"/>.
     /// </summary>
     /// <param name="message">
     /// Exception message.
@@ -24,7 +27,7 @@ public class RequestException : Exception
     }
 
     /// <summary>
-    /// Initializes a new instance of <see cref="RequestException"/>.
+    /// Initialize a new instance of <see cref="RequestException"/>.
     /// </summary>
     /// <param name="message">
     /// Exception message.
