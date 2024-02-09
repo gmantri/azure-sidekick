@@ -80,7 +80,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             ["UnableToFindStorageAccountDetails"] =
                 "My apologies, but I am not able to get the details about \"{0}\" storage account. Please make sure that the storage account exists in the selected subscription and you have permissions to access it."
         };
-        _genAIRepository.ChatResponseReceivedEventHandler += HandleChatResponseReceivedEvent;
     }
     
     /// <summary>
@@ -307,8 +306,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
         IEnumerable<ChatResponse> chatHistory, StreamingResponseState state = default, IOperationContext operationContext = default)
     {
         var arguments = GetDefaultChatArguments(chatHistory);
-        await _genAIRepository.GetStreamingResponse(question, ServiceName,
-            Core.Constants.StorageIntents.GeneralInformation, arguments, state, operationContext);
+        await GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.GeneralInformation, arguments,
+            state, operationContext);
     }
 
     /// <summary>
@@ -403,8 +402,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             }
             var arguments = GetDefaultChatArguments(chatHistory);
             arguments[Constants.ChatArguments.Context] = context.ToString();
-            await _genAIRepository.GetStreamingResponse(question, ServiceName,
-                Core.Constants.StorageIntents.StorageAccounts, arguments, state, operationContext);
+            await GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.StorageAccounts, arguments,
+                state, operationContext);
         }
     }
 
@@ -520,8 +519,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             {
                 var arguments = GetDefaultChatArguments(chatHistory);
                 arguments[Constants.ChatArguments.Context] = storageAccount.ConvertToYaml();
-                await _genAIRepository.GetStreamingResponse(question, ServiceName,
-                    Core.Constants.StorageIntents.StorageAccount, arguments, state, operationContext);
+                await GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.StorageAccount, arguments,
+                    state, operationContext);
             }
         }
     }
@@ -550,6 +549,47 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     }
 
     /// <summary>
+    /// Get and process streaming response from LLM.
+    /// </summary>
+    /// <param name="question">
+    /// User question.
+    /// </param>
+    /// <param name="functionName">
+    /// Semantic function to invoke.
+    /// </param>
+    /// <param name="arguments">
+    /// Arguments for prompt execution.
+    /// </param>
+    /// <param name="state">
+    /// <see cref="StreamingResponseState"/>.
+    /// </param>
+    /// <param name="operationContext">
+    /// <see cref="IOperationContext"/>.
+    /// </param>
+    private async Task GetStreamingResponseFromLlm(string question, string functionName,
+        IDictionary<string, object> arguments, StreamingResponseState state, IOperationContext operationContext)
+    {
+        var streamingResponseResult = _genAIRepository.GetStreamingResponse(question, ServiceName,
+            functionName, arguments, operationContext);
+        await foreach (var chatResponse in streamingResponseResult)
+        {
+            var operationResult = new SuccessOperationResult<ChatResponse>()
+            {
+                Item = chatResponse,
+                StatusCode = HttpStatusCode.OK
+            };
+            var isLastResponse = (chatResponse.PromptTokens > 0 || chatResponse.CompletionTokens > 0) &&
+                                 chatResponse.StoreInChatHistory;
+            RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
+            {
+                OperationResult = operationResult,
+                IsLastResponse = isLastResponse,
+                State = state
+            });
+        }
+    }
+
+    /// <summary>
     /// Extract storage entities from a chat response.
     /// </summary>
     /// <param name="chatResponse">
@@ -563,31 +603,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
         var response = chatResponse.Response;
         var storageEntities = System.Text.Json.JsonSerializer.Deserialize<StorageEntities>(response);
         return storageEntities;
-    }
-    
-    /// <summary>
-    /// Chat response received event handler.
-    /// </summary>
-    /// <param name="sender">
-    /// Event sender.
-    /// </param>
-    /// <param name="args">
-    /// Event arguments. <see cref="ChatResponseReceivedEventArgs"/>.
-    /// </param>
-    private void HandleChatResponseReceivedEvent(object sender, EventArgs args)
-    {
-        var eventArgs = (ChatResponseReceivedEventArgs)args;
-        var operationResult = new SuccessOperationResult<ChatResponse>()
-        {
-            Item = eventArgs.ChatResponse,
-            StatusCode = HttpStatusCode.OK
-        };
-        RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
-        {
-            OperationResult = operationResult,
-            IsLastResponse = eventArgs.IsLastResponse,
-            State = eventArgs.State
-        });
     }
     
     /// <summary>

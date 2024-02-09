@@ -30,9 +30,9 @@ public interface IGenAIRepository
     /// <see cref="ChatResponse"/>.
     /// </returns>
     Task<ChatResponse> GetResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, IOperationContext operationContext = default);
-
+    
     /// <summary>
-    /// Get response to a user's question.
+    /// Get streaming response to a user's question.
     /// </summary>
     /// <param name="question">
     /// User question.
@@ -46,19 +46,11 @@ public interface IGenAIRepository
     /// <param name="arguments">
     /// Arguments for prompt execution. It will contain the data that will be passed to the prompt template.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
-    /// <see cref="ChatResponse"/>.
+    /// <see cref="IAsyncEnumerable{ChatResponse}"/>.
     /// </returns>
-    Task GetStreamingResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, StreamingResponseState state = default, IOperationContext operationContext = default);
-    
-    /// <summary>
-    /// Event handler for chat response received event.
-    /// </summary>
-    event EventHandler ChatResponseReceivedEventHandler;
+    IAsyncEnumerable<ChatResponse> GetStreamingResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default, IOperationContext operationContext = default);
 }

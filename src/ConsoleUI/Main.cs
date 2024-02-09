@@ -101,12 +101,15 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
         do
         {
             Console.WriteLine("");
-            Console.WriteLine("Please ask a question or enter a command.");
+            Console.WriteLine("[Azure Sidekick] Please ask a question or enter a command.");
             var userInput = Console.ReadLine()?.Trim();
             if (string.IsNullOrWhiteSpace(userInput)) continue;
-            userInput = userInput.Trim();
             switch (userInput.ToLower())
             {
+                case "cls":
+                case "clear":
+                    Console.Clear();
+                    break;
                 case "exit":
                 case "quit":
                 {
@@ -188,7 +191,7 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
                             _logger?.LogChatResponse(result, context);
                         }
                     }
-                    catch (Exception exception)
+                    catch (Exception)
                     {
                         Console.WriteLine("An error occurred while processing request. Please see error log for more details.");
                     }
@@ -298,12 +301,13 @@ Currently, I can provide answers to:
 - your questions about storage accounts in your Azure subscriptions.
 - your questions about a specific storage account in your Azure subscription.
 
-Here are some commands that you can use:
-- change subscription: Use this command if you need to change the subscription.
-- clear chat history: Use this command to clear chat history.
-- toggle response mode: Use this command to toggle the response mode between streaming (default, recommended) and non-streaming.
-- help: Use this command to see help.
-- exit or quit: Use either of these commands to exit the application.
+Here are the commands that you can use:
+- ""change subscription"": Use this command if you need to change the subscription.
+- ""clear chat history"": Use this command to clear chat history.
+- ""toggle response mode"": Use this command to toggle the response mode between streaming (default, recommended) and non-streaming.
+- ""cls"" or ""clear"": Use either of these commands to clear the console.
+- ""help"": Use this command to see help.
+- ""exit"" or ""quit"": Use either of these commands to exit the application.
 
 Before you begin:
 =================
@@ -333,12 +337,13 @@ Currently, I can provide answers to:
 - your questions about storage accounts in your Azure subscriptions.
 - your questions about a specific storage account in your Azure subscription.
 
-Here are some commands that you can use:
-- change subscription: Use this command if you need to change the subscription.
-- clear chat history: Use this command to clear chat history.
-- toggle response mode: Use this command to toggle the response mode between streaming (default, recommended) and non-streaming.
-- help: Use this command to see this message again.
-- exit or quit: Use either of these commands to exit the application.
+Here are the commands that you can use:
+- ""change subscription"": Use this command if you need to change the subscription.
+- ""clear chat history"": Use this command to clear chat history.
+- ""toggle response mode"": Use this command to toggle the response mode between streaming (default, recommended) and non-streaming.
+- ""cls"" or ""clear"": Use either of these commands to clear the console.
+- ""help"": Use this command to see help.
+- ""exit"" or ""quit"": Use either of these commands to exit the application.
     ";
         Console.WriteLine(message);
     }

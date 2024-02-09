@@ -52,7 +52,6 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     {
         _genAIRepository = genAIRepository;
         _logger = logger;
-        _genAIRepository.ChatResponseReceivedEventHandler += HandleChatResponseReceivedEvent;
         _intentPredefinedMessages = new Dictionary<string, string>()
         {
             [Core.Constants.Intent.Ability] = "I can help you with your questions about Azure.",
@@ -320,33 +319,24 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
         IOperationContext operationContext)
     {
         var arguments = GetDefaultChatArguments(chatHistory);
-        await _genAIRepository.GetStreamingResponse(question, pluginName, functionName, arguments,
-            state, operationContext);
-    }
-
-    /// <summary>
-    /// Chat response received event handler.
-    /// </summary>
-    /// <param name="sender">
-    /// Event sender.
-    /// </param>
-    /// <param name="args">
-    /// Event arguments. <see cref="ChatResponseReceivedEventArgs"/>.
-    /// </param>
-    private void HandleChatResponseReceivedEvent(object sender, EventArgs args)
-    {
-        var eventArgs = (ChatResponseReceivedEventArgs)args;
-        var operationResult = new SuccessOperationResult<ChatResponse>()
+        var result = _genAIRepository.GetStreamingResponse(question, pluginName, functionName, arguments,
+            operationContext);
+        await foreach (var chatResponse in result)
         {
-            Item = eventArgs.ChatResponse,
-            StatusCode = HttpStatusCode.OK
-        };
-        RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
-        {
-            OperationResult = operationResult,
-            IsLastResponse = eventArgs.IsLastResponse,
-            State = eventArgs.State
-        });
+            var operationResult = new SuccessOperationResult<ChatResponse>()
+            {
+                Item = chatResponse,
+                StatusCode = HttpStatusCode.OK
+            };
+            var isLastResponse = (chatResponse.PromptTokens > 0 || chatResponse.CompletionTokens > 0) &&
+                                 chatResponse.StoreInChatHistory;
+            RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
+            {
+                OperationResult = operationResult,
+                IsLastResponse = isLastResponse,
+                State = state
+            });
+        }
     }
     
     /// <summary>
