@@ -35,16 +35,6 @@ public class GenAIRepository : IGenAIRepository
     /// Base directory paths for semantic prompts.
     /// </summary>
     private readonly string _basePromptsPath = Path.Combine("Plugins", "Semantic");
-        
-    /// <summary>
-    /// <see cref="TaskCompletionSource"/>.
-    /// </summary>
-    private TaskCompletionSource<bool> _tcs;
-    
-    /// <summary>
-    /// Event handler for chat response received event.
-    /// </summary>
-    public event EventHandler ChatResponseReceivedEventHandler;
 
     /// <summary>
     /// Create an instance of <see cref="GenAIRepository"/>.
@@ -135,9 +125,9 @@ public class GenAIRepository : IGenAIRepository
             _logger?.LogOperation(context);
         }
     }
-
+    
     /// <summary>
-    /// Get a streaming response to a user's question.
+    /// Get response to a user's question.
     /// </summary>
     /// <param name="question">
     /// User question.
@@ -151,26 +141,20 @@ public class GenAIRepository : IGenAIRepository
     /// <param name="arguments">
     /// Arguments for prompt execution. It will contain the data that will be passed to the prompt template.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
-    /// <see cref="ChatResponse"/>.
+    /// <see cref="IAsyncEnumerable{ChatResponse}"/>.
     /// </returns>
-    public async Task GetStreamingResponse(string question, string pluginName, string functionName,
-        IDictionary<string, object> arguments = default, StreamingResponseState state = default, IOperationContext operationContext = default)
+    public async IAsyncEnumerable<ChatResponse> GetStreamingResponse(string question, string pluginName, string functionName, IDictionary<string, object> arguments = default,
+        IOperationContext operationContext = default)
     {
         var context = new OperationContext("GenAIRepository:GetStreamingResponse", $"Get streaming response. Question: {question}; Plugin: {pluginName}; Function: {functionName}.", operationContext);
+        IAsyncEnumerable<StreamingKernelContent> result;
+        string prompt;
         try
         {
-            var streamingResponseState = state ?? new StreamingResponseState()
-            {
-                OperationContext = context
-            };
-            _tcs = new TaskCompletionSource<bool>();
             var kernel = GetKernel();
             var path = Path.Combine(Directory.GetCurrentDirectory(), _basePromptsPath, pluginName, functionName, "index.yaml");
             var function = kernel.CreateFunctionFromPromptYaml(await File.ReadAllTextAsync(path),
@@ -190,49 +174,9 @@ public class GenAIRepository : IGenAIRepository
                     kernelArguments.TryAdd(kvp.Key, kvp.Value);
                 }
             }
-            var result = kernel.InvokeStreamingAsync(function, kernelArguments);
-            StringBuilder responseStringBuilder = new StringBuilder();
-            await foreach (var item in result)
-            {
-                var response = item.ToString();
-                // store the partial response. We will use it in the end to calculate prompt and completion tokens.
-                responseStringBuilder.Append(response);
-                var streamingChatResponse = new ChatResponse()
-                {
-                    Question = question,
-                    Intent = pluginName,
-                    Function = functionName,
-                    Response = response
-                };
-                var streamingResponseEventArgs = new ChatResponseReceivedEventArgs()
-                {
-                    ChatResponse = streamingChatResponse,
-                    IsLastResponse = false,
-                    State = streamingResponseState
-                };
-                RaiseChatResponseReceivedEvent(streamingResponseEventArgs);
-            }
-            //send a dummy chat response to indicate end of response
-            var answer = responseStringBuilder.ToString();
+            result = kernel.InvokeStreamingAsync(function, kernelArguments);
             var getPromptResult = await GetPrompt(kernel, path, kernelArguments, context);
-            var tokenUsage = CalculateTokensForPromptAndResponse(getPromptResult.prompt ?? question, answer, context);
-            var finalChatResponse = new ChatResponse()
-            {
-                Question = question,
-                Response = answer,
-                PromptTokens = tokenUsage.PromptTokens,
-                CompletionTokens = tokenUsage.CompletionTokens,
-                Intent = pluginName,
-                Function = functionName,
-                StoreInChatHistory = true
-            };
-            var finalResponseEventArgs = new ChatResponseReceivedEventArgs()
-            {
-                ChatResponse = finalChatResponse,
-                IsLastResponse = true,
-                State = streamingResponseState
-            };
-            RaiseChatResponseReceivedEvent(finalResponseEventArgs);
+            prompt = getPromptResult.prompt;
         }
         catch (Exception exception)
         {
@@ -244,6 +188,35 @@ public class GenAIRepository : IGenAIRepository
         {
             _logger?.LogOperation(context);
         }
+
+        var responseStringBuilder = new StringBuilder();
+        await foreach (var item in result)
+        {
+            var response = item.ToString();
+            responseStringBuilder.Append(response);
+            var streamingChatResponse = new ChatResponse()
+            {
+                Question = question,
+                Intent = pluginName,
+                Function = functionName,
+                Response = response
+            };
+            yield return streamingChatResponse;
+        }
+        //send a dummy chat response to indicate end of response
+        var answer = responseStringBuilder.ToString();
+        var tokenUsage = CalculateTokensForPromptAndResponse(prompt ?? question, answer, context);
+        var finalChatResponse = new ChatResponse()
+        {
+            Question = question,
+            Response = answer,
+            PromptTokens = tokenUsage.PromptTokens,
+            CompletionTokens = tokenUsage.CompletionTokens,
+            Intent = pluginName,
+            Function = functionName,
+            StoreInChatHistory = true
+        };
+        yield return finalChatResponse;
     }
 
     /// <summary>
@@ -313,21 +286,6 @@ public class GenAIRepository : IGenAIRepository
         {
             _logger?.LogException(exception, operationContext);
             return (PromptTokens: 0, CompletionTokens: 0);
-        }
-    }
-    
-    /// <summary>
-    /// Raise chat response received event.
-    /// </summary>
-    /// <param name="args">
-    /// <see cref="ChatResponseReceivedEventArgs"/>.
-    /// </param>
-    private void RaiseChatResponseReceivedEvent(ChatResponseReceivedEventArgs args)
-    {
-        ChatResponseReceivedEventHandler?.Invoke(this, args);
-        if (args.IsLastResponse)
-        {
-            _tcs.SetResult(true);
         }
     }
 
