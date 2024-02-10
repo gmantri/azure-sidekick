@@ -25,9 +25,6 @@ public interface IAzureChatManagementService : IChatManagementService
     /// <param name="question">
     /// User's question.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="credential">
     /// <see cref="TokenCredential"/>.
     /// </param>
@@ -37,7 +34,7 @@ public interface IAzureChatManagementService : IChatManagementService
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    Task<IOperationResult> GetResponse(string subscriptionId, string question, IEnumerable<ChatResponse> chatHistory, TokenCredential credential = default, IOperationContext operationContext = default);
+    Task<IOperationResult> GetResponse(string subscriptionId, string question, TokenCredential credential = default, IOperationContext operationContext = default);
     
     /// <summary>
     /// Get a streaming response to user's question.
@@ -47,9 +44,6 @@ public interface IAzureChatManagementService : IChatManagementService
     /// </param>
     /// <param name="question">
     /// User's question.
-    /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
     /// </param>
     /// <param name="state">
     /// <see cref="StreamingResponseState"/>.
@@ -63,5 +57,5 @@ public interface IAzureChatManagementService : IChatManagementService
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    Task GetStreamingResponse(string subscriptionId, string question, IEnumerable<ChatResponse> chatHistory, StreamingResponseState state = default, TokenCredential credential = default, IOperationContext operationContext = default);
+    Task GetStreamingResponse(string subscriptionId, string question, StreamingResponseState state = default, TokenCredential credential = default, IOperationContext operationContext = default);
 }

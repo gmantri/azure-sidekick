@@ -41,14 +41,14 @@ public class Main
     private (string subscriptionId, string subscriptionName) _selectedSubscription = ("", "");
 
     /// <summary>
-    /// Chat history.
-    /// </summary>
-    private readonly List<ChatResponse> _chatHistory = new List<ChatResponse>();
-
-    /// <summary>
     /// Indicates if the response should be streamed or not (default is true).
     /// </summary>
     private bool _getStreamingResponse = true;
+
+    /// <summary>
+    /// Dummy user id.
+    /// </summary>
+    private readonly string _dummyUserId = Guid.Empty.ToString();
     
     /// <summary>
     /// Initialize an instance of <see cref="Main"/>.
@@ -85,7 +85,6 @@ public class Main
         Console.WriteLine("Listing subscriptions. Please wait.");
         _subscriptions = await ListSubscriptions();
         _selectedSubscription = GetSubscriptionIdAndName(SelectSubscription());
-        _chatHistory.Clear();
         Console.WriteLine(@$"
 You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscription.subscriptionId})"" subscription.
         ");
@@ -104,47 +103,54 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
             Console.WriteLine("[Azure Sidekick] Please ask a question or enter a command.");
             var userInput = Console.ReadLine()?.Trim();
             if (string.IsNullOrWhiteSpace(userInput)) continue;
-            switch (userInput.ToLower())
+            var context = new OperationContext("Main:Chat", $"Question: {userInput}")
             {
-                case "cls":
-                case "clear":
-                    Console.Clear();
-                    break;
-                case "exit":
-                case "quit":
+                UserId = _dummyUserId
+            };
+            var logOperation = false;
+            try
+            {
+                switch (userInput.ToLower())
                 {
-                    continueLoop = false;
-                    break;
-                }
-                case "change subscription":
-                {
-                    _selectedSubscription = GetSubscriptionIdAndName(SelectSubscription());
-                    _chatHistory.Clear();
-                    Console.WriteLine($"Active subscription changed to \"{_selectedSubscription.subscriptionName} ({_selectedSubscription.subscriptionId})\".");
-                    break;
-                }
-                case "clear chat history":
-                {
-                    _chatHistory.Clear();
-                    Console.WriteLine("Chat history cleared.");
-                    break;
-                }
-                case "toggle response mode":
-                {
-                    _getStreamingResponse = !_getStreamingResponse;
-                    Console.WriteLine(_getStreamingResponse ? "Response will be streamed." : "Response will not be streamed.");
-                    break;
-                }
-                case "help":
-                {
-                    Help();
-                    break;
-                }
-                default:
-                {
-                    var context = new OperationContext("Main:Chat", $"Question: {userInput}");
-                    try
+                    case "cls":
+                    case "clear":
                     {
+                        Console.Clear();
+                        break;
+                    }
+                    case "exit":
+                    case "quit":
+                    {
+                        continueLoop = false;
+                        break;
+                    }
+                    case "change subscription":
+                    {
+                        _selectedSubscription = GetSubscriptionIdAndName(SelectSubscription());
+                        await _generalChatManagementService.ClearChatHistory(context);
+                        Console.WriteLine($"Active subscription changed to \"{_selectedSubscription.subscriptionName} ({_selectedSubscription.subscriptionId})\".");
+                        break;
+                    }
+                    case "clear chat history":
+                    {
+                        await _generalChatManagementService.ClearChatHistory(context);
+                        Console.WriteLine("Chat history cleared.");
+                        break;
+                    }
+                    case "toggle response mode":
+                    {
+                        _getStreamingResponse = !_getStreamingResponse;
+                        Console.WriteLine(_getStreamingResponse ? "Response will be streamed." : "Response will not be streamed.");
+                        break;
+                    }
+                    case "help":
+                    {
+                        Help();
+                        break;
+                    }
+                    default:
+                    {
+                        logOperation = true;
                         var state = new StreamingResponseState()
                         {
                             UserInput = userInput
@@ -177,29 +183,28 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
                         else
                         {
                             result = await GetResponse(question, intent, context);
+                            Console.WriteLine(result.Response);
                             promptTokens += result.PromptTokens;
                             completionTokens += result.CompletionTokens;
-                            Console.WriteLine(result.Response);
-                            if (result.StoreInChatHistory)
-                            {
-                                _chatHistory.Add(result);
-                            }
 #if DEBUG
-                        Console.WriteLine($"Token usage - Prompt tokens: {promptTokens}; Completion tokens: {completionTokens}");
+                            Console.WriteLine($"Token usage - Prompt tokens: {promptTokens}; Completion tokens: {completionTokens}");
 #endif
                             result.OriginalQuestion = userInput;
                             _logger?.LogChatResponse(result, context);
                         }
+                        break;
                     }
-                    catch (Exception)
-                    {
-                        Console.WriteLine("An error occurred while processing request. Please see error log for more details.");
-                    }
-                    finally
-                    {
-                        _logger?.LogOperation(context);
-                    }
-                    break;
+                }
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("An error occurred while processing request. Please see error log for more details.");
+            }
+            finally
+            {
+                if (logOperation)
+                {
+                    _logger?.LogOperation(context);
                 }
             }
         } while (continueLoop);
@@ -380,7 +385,7 @@ Here are the commands that you can use:
     /// <exception cref="Exception"></exception>
     private async Task<ChatResponse> GetRephrasedQuestion(string question, IOperationContext context)
     {
-        var result = await _generalChatManagementService.Rephrase(question, _chatHistory, context);
+        var result = await _generalChatManagementService.Rephrase(question, context);
         if (!result.IsOperationSuccessful) throw result.Error;
         var successResult = (SuccessOperationResult<ChatResponse>)result;
         return successResult.Item;
@@ -401,7 +406,7 @@ Here are the commands that you can use:
     /// <exception cref="Exception"></exception>
     private async Task<ChatResponse> GetIntent(string question, IOperationContext context)
     {
-        var result = await _generalChatManagementService.GetIntent(question, _chatHistory, context);
+        var result = await _generalChatManagementService.GetIntent(question, context);
         if (!result.IsOperationSuccessful) throw result.Error;
         var successResult = (SuccessOperationResult<ChatResponse>)result;
         return successResult.Item;
@@ -434,13 +439,12 @@ Here are the commands that you can use:
             case Constants.Intent.Other:
             case Constants.Intent.Information:
             case Constants.Intent.Azure:
-                result = await _generalChatManagementService.GetResponse(question, intent, _chatHistory,
-                    context);
+                result = await _generalChatManagementService.GetResponse(question, intent, context);
                 break;
             default:
                 var azureChatManagementService = _azureChatManagementServiceFactory.GetService(intent);
                 result = await azureChatManagementService.GetResponse(_selectedSubscription.subscriptionId,
-                    question, _chatHistory, operationContext: context);
+                    question, operationContext: context);
                 break;
         }
         if (!result.IsOperationSuccessful) throw result.Error;
@@ -456,6 +460,9 @@ Here are the commands that you can use:
     /// </param>
     /// <param name="intent">
     /// Intent of the question.
+    /// </param>
+    /// <param name="state">
+    /// <see cref="StreamingResponseState"/>.
     /// </param>
     /// <param name="context">
     /// <see cref="IOperationContext"/>.
@@ -480,7 +487,6 @@ Here are the commands that you can use:
                 await _generalChatManagementService.GetStreamingResponse(
                     question: question, 
                     intent: intent, 
-                    chatHistory: _chatHistory,
                     state: state, 
                     operationContext: context);
                 break;
@@ -492,7 +498,6 @@ Here are the commands that you can use:
                 await azureChatManagementService.GetStreamingResponse(
                     subscriptionId: _selectedSubscription.subscriptionId, 
                     question: question, 
-                    chatHistory: _chatHistory,
                     state: state, 
                     operationContext: context);
                 break;
@@ -528,16 +533,10 @@ Here are the commands that you can use:
             {
                 Console.WriteLine();
                 var state = eventArgs.State;
-                var promptTokens = chatResponse.PromptTokens + state.PromptTokens;
-                var completionTokens = chatResponse.CompletionTokens + state.CompletionTokens;
 #if DEBUG
-                Console.WriteLine($"Token usage - Prompt tokens: {promptTokens}; Completion tokens: {completionTokens}");
+                Console.WriteLine($"Token usage - Prompt tokens: {chatResponse.PromptTokens + state.PromptTokens}; Completion tokens: {chatResponse.CompletionTokens + state.CompletionTokens}");
 #endif
-                chatResponse.OriginalQuestion = eventArgs.State.UserInput;
-                if (chatResponse.StoreInChatHistory)
-                {
-                    _chatHistory.Add(chatResponse);
-                }
+                chatResponse.OriginalQuestion = state.UserInput;
                 _logger?.LogChatResponse(chatResponse, eventArgs.State.OperationContext);
                 Console.WriteLine("");
             }

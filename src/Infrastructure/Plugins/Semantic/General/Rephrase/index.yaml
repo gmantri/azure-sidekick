@@ -16,8 +16,8 @@ template: |
   Conversation History:
   ====================
   {{#each chat_history}}
-  Question: {{OriginalQuestion}}
-  Answer: {{Question}}
+  Question: {{Question}}
+  Answer: {{Response}}
   {{/each}}
   </message>
   

@@ -1,7 +1,5 @@
-using AzureSidekick.Core.Interfaces;
-using AzureSidekick.Infrastructure.Interfaces;
-using AzureSidekick.Services.Factory;
 using Microsoft.Extensions.DependencyInjection;
+using AzureSidekick.Services.Factory;
 using AzureSidekick.Services.Interfaces;
 using AzureSidekick.Services.Management;
 
@@ -20,18 +18,11 @@ public static class ServiceExtensions
     /// </returns>
     public static IServiceCollection RegisterServicesDependencies(this IServiceCollection services)
     {
-        var provider = services.BuildServiceProvider();
-        var logger = provider.GetRequiredService<ILogger>();
-        var genAIRepository = provider.GetRequiredService<IGenAIRepository>();
-        var storageRepository = provider.GetRequiredService<IStorageOperationsRepository>();
-
-        IAzureChatManagementService storageChatManagementService =
-            new AzureStorageChatManagementService(genAIRepository, storageRepository, logger);
         services
             .AddSingleton<ISubscriptionManagementService, SubscriptionManagementService>()
             .AddSingleton<IGeneralChatManagementService, GeneralChatManagementService>()
             .AddSingleton<IAzureChatManagementServiceFactory, AzureChatManagementServiceFactory>()
-            .AddSingleton(storageChatManagementService);
+            .AddKeyedSingleton<IAzureChatManagementService, AzureStorageChatManagementService>("Storage");
         return services;
     }
 }
