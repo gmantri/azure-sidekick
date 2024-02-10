@@ -20,6 +20,11 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     private readonly IGenAIRepository _genAIRepository;
 
     /// <summary>
+    /// <see cref="IChatHistoryOperationsRepository"/>.
+    /// </summary>
+    private readonly IChatHistoryOperationsRepository _chatHistoryOperationsRepository;
+
+    /// <summary>
     /// <see cref="ILogger"/>.
     /// </summary>
     private readonly ILogger _logger;
@@ -45,12 +50,16 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <param name="genAIRepository">
     /// <see cref="IGenAIRepository"/>.
     /// </param>
+    /// <param name="chatHistoryOperationsRepository">
+    /// <see cref="IChatHistoryOperationsRepository"/>.
+    /// </param>
     /// <param name="logger">
     /// <see cref="ILogger"/>.
     /// </param>
-    public GeneralChatManagementService(IGenAIRepository genAIRepository, ILogger logger)
+    public GeneralChatManagementService(IGenAIRepository genAIRepository, IChatHistoryOperationsRepository chatHistoryOperationsRepository, ILogger logger)
     {
         _genAIRepository = genAIRepository;
+        _chatHistoryOperationsRepository = chatHistoryOperationsRepository;
         _logger = logger;
         _intentPredefinedMessages = new Dictionary<string, string>()
         {
@@ -67,20 +76,18 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <param name="question">
     /// User question.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    public async Task<IOperationResult> Rephrase(string question, IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default)
+    public async Task<IOperationResult> Rephrase(string question, IOperationContext operationContext = default)
     {
         var context = new OperationContext("GeneralChatManagementService:Rephrase", $"Rephrase question. Question: {question}", operationContext);
         try
         {
+            var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             var arguments = new Dictionary<string, object>()
             {
                 [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
@@ -110,20 +117,18 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <param name="question">
     /// User question.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    public async Task<IOperationResult> GetIntent(string question, IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default)
+    public async Task<IOperationResult> GetIntent(string question, IOperationContext operationContext = default)
     {
         var context = new OperationContext("GeneralChatManagementService:GetIntent", $"Get intent. Question: {question}", operationContext);
         try
         {
+            var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             var arguments = new Dictionary<string, object>()
             {
                 [Constants.ChatArguments.GroundingRules] = GetGroundingRules(),
@@ -156,21 +161,19 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <param name="intent">
     /// Question's intent.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    public async Task<IOperationResult> GetResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
+    public async Task<IOperationResult> GetResponse(string question, string intent,
         IOperationContext operationContext = default)
     {
         var context = new OperationContext("GeneralChatManagementService:GetResponse", $"Get response. Question: {question}; Intent: {intent}.", operationContext);
         try
         {
+            var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             switch (intent)
             {
                 case Core.Constants.Intent.Azure:
@@ -199,16 +202,13 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <param name="intent">
     /// Question's intent.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="state">
     /// <see cref="StreamingResponseState"/>.
     /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
-    public async Task GetStreamingResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
+    public async Task GetStreamingResponse(string question, string intent,
         StreamingResponseState state = default, IOperationContext operationContext = default)
     {
         var context = new OperationContext("GeneralChatManagementService:GetStreamingResponse", $"Get response. Question: {question}; Intent: {intent}.", operationContext);
@@ -219,6 +219,7 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
         try
         {
             _tcs = new TaskCompletionSource<bool>();
+            var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             switch (intent)
             {
                 case Core.Constants.Intent.Azure:
@@ -258,6 +259,33 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     }
 
     /// <summary>
+    /// Clear chat history.
+    /// </summary>
+    /// <param name="operationContext">
+    /// Operation context.
+    /// </param>
+    public async Task<IOperationResult> ClearChatHistory(IOperationContext operationContext = default)
+    {
+        var context = new OperationContext("GeneralChatManagementService:ClearChatHistory", "Clear chat history.", operationContext);
+        try
+        {
+            await _chatHistoryOperationsRepository.Clear(context.UserId, context);
+            return new SuccessOperationResult<ChatResponse>()
+            {
+                StatusCode = HttpStatusCode.OK
+            };
+        }
+        catch (Exception exception)
+        {
+            return Helper.GetFailOperationResultFromException(exception, _logger, context);        
+        }
+        finally
+        {
+            _logger.LogOperation(context);
+        }
+    }
+
+    /// <summary>
     /// Get response from LLM in a non-streaming way.
     /// </summary>
     /// <param name="question">
@@ -285,6 +313,7 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
         var arguments = GetDefaultChatArguments(chatHistory);
         var chatResponse = await _genAIRepository.GetResponse(question, pluginName, functionName,
             arguments: arguments, operationContext: operationContext);
+        await Helper.SaveChatResponse(_chatHistoryOperationsRepository, chatResponse, operationContext);
         return new SuccessOperationResult<ChatResponse>()
         {
             Item = chatResponse,
@@ -330,6 +359,10 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
             };
             var isLastResponse = (chatResponse.PromptTokens > 0 || chatResponse.CompletionTokens > 0) &&
                                  chatResponse.StoreInChatHistory;
+            if (isLastResponse)
+            {
+                await Helper.SaveChatResponse(_chatHistoryOperationsRepository, chatResponse, operationContext);
+            }
             RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
             {
                 OperationResult = operationResult,
@@ -366,7 +399,7 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <returns>
     /// Chat result. <see cref="SuccessOperationResult{ChatResponse}"/>.
     /// </returns>
-    private static IOperationResult GetPredefinedOperationResult(string question, string intent)
+    private IOperationResult GetPredefinedOperationResult(string question, string intent)
     {
         var response = _intentPredefinedMessages[Core.Constants.Intent.Other];
         if (_intentPredefinedMessages.TryGetValue(intent, out var message))

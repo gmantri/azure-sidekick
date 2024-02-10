@@ -15,16 +15,13 @@ public interface IGeneralChatManagementService : IChatManagementService
     /// <param name="question">
     /// User question.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    Task<IOperationResult> Rephrase(string question, IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default);
+    Task<IOperationResult> Rephrase(string question, IOperationContext operationContext = default);
 
     /// <summary>
     /// Gets the intent of a question.
@@ -32,16 +29,13 @@ public interface IGeneralChatManagementService : IChatManagementService
     /// <param name="question">
     /// User question.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    Task<IOperationResult> GetIntent(string question, IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default);
+    Task<IOperationResult> GetIntent(string question, IOperationContext operationContext = default);
 
     /// <summary>
     /// Get the response for a question based on the question's intent.
@@ -52,16 +46,13 @@ public interface IGeneralChatManagementService : IChatManagementService
     /// <param name="intent">
     /// Question's intent.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    Task<IOperationResult> GetResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
+    Task<IOperationResult> GetResponse(string question, string intent,
         IOperationContext operationContext = default);
     
     /// <summary>
@@ -73,15 +64,20 @@ public interface IGeneralChatManagementService : IChatManagementService
     /// <param name="intent">
     /// Question's intent.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="state">
     /// <see cref="StreamingResponseState"/>.
     /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
-    Task GetStreamingResponse(string question, string intent, IEnumerable<ChatResponse> chatHistory,
+    Task GetStreamingResponse(string question, string intent,
         StreamingResponseState state = default, IOperationContext operationContext = default);
+
+    /// <summary>
+    /// Clear chat history.
+    /// </summary>
+    /// <param name="operationContext">
+    /// Operation context.
+    /// </param>
+    Task<IOperationResult> ClearChatHistory(IOperationContext operationContext = default);
 }

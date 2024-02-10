@@ -33,6 +33,11 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     private readonly IStorageOperationsRepository _storageOperationsRepository;
 
     /// <summary>
+    /// <see cref="IChatHistoryOperationsRepository"/>.
+    /// </summary>
+    private readonly IChatHistoryOperationsRepository _chatHistoryOperationsRepository;
+
+    /// <summary>
     /// <see cref="ILogger"/>.
     /// </summary>
     private readonly ILogger _logger;
@@ -61,13 +66,17 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="storageOperationsRepository">
     /// <see cref="IStorageOperationsRepository"/>.
     /// </param>
+    /// <param name="chatHistoryOperationsRepository">
+    /// <see cref="IChatHistoryOperationsRepository"/>.
+    /// </param>
     /// <param name="logger">
     /// <see cref="ILogger"/>.
     /// </param>
-    public AzureStorageChatManagementService(IGenAIRepository genAIRepository, IStorageOperationsRepository storageOperationsRepository, ILogger logger)
+    public AzureStorageChatManagementService(IGenAIRepository genAIRepository, IStorageOperationsRepository storageOperationsRepository, IChatHistoryOperationsRepository chatHistoryOperationsRepository, ILogger logger)
     {
         _genAIRepository = genAIRepository;
         _storageOperationsRepository = storageOperationsRepository;
+        _chatHistoryOperationsRepository = chatHistoryOperationsRepository;
         _logger = logger;
         _predefinedMessages = new Dictionary<string, string>()
         {
@@ -91,9 +100,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="question">
     /// User's question.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="credential">
     /// <see cref="TokenCredential"/>.
     /// </param>
@@ -101,15 +107,15 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// Operation context.
     /// </param>
     /// <returns>
-    /// Chat result. Could be <see cref="SuccessOperationResult{T}"/> or <see cref="FailOperationResult"/>.
+    /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    public async Task<IOperationResult> GetResponse(string subscriptionId, string question, IEnumerable<ChatResponse> chatHistory,
+    public async Task<IOperationResult> GetResponse(string subscriptionId, string question,
         TokenCredential credential = default, IOperationContext operationContext = default)
     {
         var context = new OperationContext("AzureStorageChatManagementService:GetResponse", $"Get response. Question: {question}", operationContext);
         try
         {
-            chatHistory = chatHistory?.ToList();
+            var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             int promptTokens = 0, completionTokens = 0;
             // first get the intent of the question.
             var result = await RecognizeIntent(question, chatHistory, context);
@@ -128,12 +134,14 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
                     Question = question,
                     Response = _predefinedMessages["UnableToAnswer"],
                     Intent = ServiceName,
-                    Function = intent
+                    Function = intent,
+                    StoreInChatHistory = true
                 }
             };
 
             result.PromptTokens += promptTokens;
             result.CompletionTokens += completionTokens;
+            await Helper.SaveChatResponse(_chatHistoryOperationsRepository, result, context);
             return new SuccessOperationResult<ChatResponse>()
             {
                 Item = result,
@@ -159,9 +167,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="question">
     /// User's question.
     /// </param>
-    /// <param name="chatHistory">
-    /// Chat history.
-    /// </param>
     /// <param name="state">
     /// <see cref="StreamingResponseState"/>.
     /// </param>
@@ -175,7 +180,7 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
     public async Task GetStreamingResponse(string subscriptionId, string question,
-        IEnumerable<ChatResponse> chatHistory, StreamingResponseState state = default, TokenCredential credential = default,
+        StreamingResponseState state = default, TokenCredential credential = default,
         IOperationContext operationContext = default)
     {
         var context = new OperationContext("AzureStorageChatManagementService:GetStreamingResponse", $"Get response. Question: {question}", operationContext);
@@ -186,7 +191,7 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
         };
         try
         {
-            chatHistory = chatHistory?.ToList();
+            var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             // first get the intent of the question.
             var result = await RecognizeIntent(question, chatHistory, context);
             streamingResponseState.PromptTokens += result.PromptTokens;
@@ -215,8 +220,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
                 }
                 default:
                 {
-                    GenerateEventArgsAndRaiseOperationResultReceivedEvent(question,
-                        _predefinedMessages["UnableToAnswer"], intent, streamingResponseState);
+                    await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question,
+                        _predefinedMessages["UnableToAnswer"], intent, streamingResponseState, context);
                     break;
                 }
             }
@@ -343,7 +348,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
                 Question = question,
                 Response = _predefinedMessages["NoStorageAccounts"],
                 Intent = ServiceName,
-                Function = Core.Constants.StorageIntents.StorageAccounts
+                Function = Core.Constants.StorageIntents.StorageAccounts,
+                StoreInChatHistory = true
             };
         }
         var context = new StringBuilder();
@@ -389,8 +395,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
         var storageAccounts = (await _storageOperationsRepository.List(subscriptionId, credential, operationContext)).ToList();
         if (storageAccounts.Count == 0)
         {
-            GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, _predefinedMessages["NoStorageAccounts"],
-                Core.Constants.StorageIntents.StorageAccounts, state);
+            await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, _predefinedMessages["NoStorageAccounts"],
+                Core.Constants.StorageIntents.StorageAccounts, state, operationContext);
         }
         else
         {
@@ -443,7 +449,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
                 Question = question,
                 Response = _predefinedMessages["UnableToExtractStorageAccountName"],
                 PromptTokens = promptTokens,
-                CompletionTokens = completionTokens
+                CompletionTokens = completionTokens,
+                StoreInChatHistory = true
             };
         }
 
@@ -456,7 +463,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
                 Question = question,
                 Response = string.Format(_predefinedMessages["UnableToFindStorageAccountDetails"], storageEntities.StorageAccount),
                 PromptTokens = promptTokens,
-                CompletionTokens = completionTokens
+                CompletionTokens = completionTokens,
+                StoreInChatHistory = true
             };
         }
         var arguments = GetDefaultChatArguments(chatHistory);
@@ -502,8 +510,8 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
         var storageEntities = ExtractStorageEntitiesFromChatResponse(result);
         if (string.IsNullOrWhiteSpace(storageEntities?.StorageAccount))
         {
-            GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, _predefinedMessages["UnableToExtractStorageAccountName"],
-                Core.Constants.StorageIntents.StorageAccount, state);
+            await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, _predefinedMessages["UnableToExtractStorageAccountName"],
+                Core.Constants.StorageIntents.StorageAccount, state, operationContext);
         }
         else
         {
@@ -511,9 +519,9 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
                 await _storageOperationsRepository.Get(subscriptionId, storageEntities.StorageAccount, credential, operationContext);
             if (storageAccount == null)
             {
-                GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, 
+                await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, 
                     string.Format(_predefinedMessages["UnableToFindStorageAccountDetails"], storageEntities.StorageAccount),
-                    Core.Constants.StorageIntents.StorageAccount, state);
+                    Core.Constants.StorageIntents.StorageAccount, state, operationContext);
             }
             else
             {
@@ -580,6 +588,10 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             };
             var isLastResponse = (chatResponse.PromptTokens > 0 || chatResponse.CompletionTokens > 0) &&
                                  chatResponse.StoreInChatHistory;
+            if (isLastResponse)
+            {
+                await Helper.SaveChatResponse(_chatHistoryOperationsRepository, chatResponse, operationContext);
+            }
             RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
             {
                 OperationResult = operationResult,
@@ -635,21 +647,26 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="state">
     /// <see cref="StreamingResponseState"/>.
     /// </param>
-    private void GenerateEventArgsAndRaiseOperationResultReceivedEvent(string question, string message, string function, StreamingResponseState state)
+    /// <param name="operationContext">
+    /// <see cref="IOperationContext"/>.
+    /// </param>
+    private async Task GenerateEventArgsAndRaiseOperationResultReceivedEvent(string question, string message, string function, StreamingResponseState state, IOperationContext operationContext)
     {
+        var chatResponse = new ChatResponse()
+        {
+            Question = question,
+            Response = message,
+            Intent = ServiceName,
+            Function = function,
+            StoreInChatHistory = true
+        };
+        await Helper.SaveChatResponse(_chatHistoryOperationsRepository, chatResponse, operationContext);
         var eventArgs = new OperationResultReceivedEventArgs()
         {
             OperationResult = new SuccessOperationResult<ChatResponse>()
             {
                 StatusCode = HttpStatusCode.OK,
-                Item = new ChatResponse()
-                {
-                    Question = question,
-                    Response = message,
-                    Intent = ServiceName,
-                    Function = function,
-                    StoreInChatHistory = true
-                }
+                Item = chatResponse
             },
             IsLastResponse = false,
             State = state

@@ -36,7 +36,6 @@ public class AzureChatManagementServiceFactory : IAzureChatManagementServiceFact
     /// </returns>
     public IAzureChatManagementService GetService(string serviceName)
     {
-        return _provider.GetServices<IAzureChatManagementService>()
-            .FirstOrDefault(s => s.ServiceName == serviceName);
+        return _provider.GetKeyedService<IAzureChatManagementService>(serviceName);
     }
 }

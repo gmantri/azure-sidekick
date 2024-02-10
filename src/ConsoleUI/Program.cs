@@ -5,6 +5,8 @@ using AzureSidekick.ConsoleUI;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Loggers;
 using AzureSidekick.Infrastructure.Extensions;
+using AzureSidekick.Infrastructure.Interfaces;
+using AzureSidekick.Infrastructure.Repository;
 using AzureSidekick.Services.Extensions;
 
 using var host = CreateHostBuilder(args).Build();
@@ -28,6 +30,7 @@ IHostBuilder CreateHostBuilder(string[] strings)
         {
             serviceCollection.AddSingleton<ILogger, FileSystemLogger>();
             serviceCollection.RegisterInfrastructureDependencies(configuration);
+            serviceCollection.AddSingleton<IChatHistoryOperationsRepository, InMemoryChatHistoryOperationsRepository>();
             serviceCollection.RegisterServicesDependencies();
             serviceCollection.AddSingleton<Main>();
         });
