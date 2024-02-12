@@ -1,6 +1,6 @@
+using System.Net;
 using Azure.ResourceManager.Resources;
 using AzureSidekick.Core;
-using AzureSidekick.Core.EventArgs;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Models;
 using AzureSidekick.Core.OperationResults;
@@ -151,25 +151,17 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
                     default:
                     {
                         logOperation = true;
-                        var state = new StreamingResponseState()
-                        {
-                            UserInput = userInput
-                        };
                         int promptTokens = 0, completionTokens = 0;
                         // first rephrase the question.
                         var result = await GetRephrasedQuestion(userInput, context);
 #if DEBUG
                         Console.WriteLine($"Rephrased question: {result.Response}");
 #endif
-                        state.PromptTokens += result.PromptTokens;
-                        state.CompletionTokens += result.CompletionTokens;
                         promptTokens += result.PromptTokens;
                         completionTokens += result.CompletionTokens;
                         var question = result.Response;
                         // now let's get the service intent
                         result = await GetIntent(question, context);
-                        state.PromptTokens += result.PromptTokens;
-                        state.CompletionTokens += result.CompletionTokens;
                         promptTokens += result.PromptTokens;
                         completionTokens += result.CompletionTokens;
                         var intent = result.Response;
@@ -178,7 +170,26 @@ You have selected ""{_selectedSubscription.subscriptionName} ({_selectedSubscrip
 #endif
                         if (_getStreamingResponse)
                         {
-                            await GetStreamingResponse(question, intent, state, context);
+                            var streamingResult = GetStreamingResponse(question, intent, context);
+                            ChatResponse chatResponse = null;
+                            await foreach (var item in streamingResult)
+                            {
+                                if (!item.IsOperationSuccessful) throw item.Error;
+                                var successResult = (SuccessOperationResult<ChatResponse>)item;
+                                chatResponse = successResult.Item;
+                                promptTokens += chatResponse.PromptTokens;
+                                completionTokens += chatResponse.CompletionTokens;
+                                if (successResult.StatusCode == HttpStatusCode.OK) //final item will always have the status code as HttpStatusCode.NoContent even though it will have the content.
+                                {
+                                    Console.Write(chatResponse.Response);
+                                }
+                            }
+#if DEBUG
+                            Console.WriteLine($"{Environment.NewLine}Token usage - Prompt tokens: {promptTokens}; Completion tokens: {completionTokens}");
+#endif
+                            chatResponse.OriginalQuestion = question;
+                            _logger?.LogChatResponse(chatResponse, context);
+                            Console.WriteLine("");
                         }
                         else
                         {
@@ -461,9 +472,6 @@ Here are the commands that you can use:
     /// <param name="intent">
     /// Intent of the question.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="context">
     /// <see cref="IOperationContext"/>.
     /// </param>
@@ -471,7 +479,7 @@ Here are the commands that you can use:
     /// <see cref="ChatResponse"/>.
     /// </returns>
     /// <exception cref="Exception"></exception>
-    private async Task GetStreamingResponse(string question, string intent, StreamingResponseState state, IOperationContext context)
+    private IAsyncEnumerable<IOperationResult> GetStreamingResponse(string question, string intent, IOperationContext context)
     {
         switch (intent)
         {
@@ -482,64 +490,17 @@ Here are the commands that you can use:
             case Constants.Intent.Information:
             case Constants.Intent.Azure:
             {
-                _generalChatManagementService.OperationResultReceivedEventHandler -= HandleOperationResultReceivedEvent;
-                _generalChatManagementService.OperationResultReceivedEventHandler += HandleOperationResultReceivedEvent;
-                await _generalChatManagementService.GetStreamingResponse(
+                return _generalChatManagementService.GetStreamingResponse(
                     question: question, 
                     intent: intent, 
-                    state: state, 
                     operationContext: context);
-                break;
             }
             default:
                 var azureChatManagementService = _azureChatManagementServiceFactory.GetService(intent);
-                azureChatManagementService.OperationResultReceivedEventHandler -= HandleOperationResultReceivedEvent;
-                azureChatManagementService.OperationResultReceivedEventHandler += HandleOperationResultReceivedEvent;
-                await azureChatManagementService.GetStreamingResponse(
+                return azureChatManagementService.GetStreamingResponse(
                     subscriptionId: _selectedSubscription.subscriptionId, 
                     question: question, 
-                    state: state, 
                     operationContext: context);
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Operation result received event handler.
-    /// </summary>
-    /// <param name="sender">
-    /// Event sender.
-    /// </param>
-    /// <param name="args">
-    /// Event arguments.
-    /// </param>
-    private void HandleOperationResultReceivedEvent(object sender, EventArgs args)
-    {
-        var eventArgs = (OperationResultReceivedEventArgs)args;
-        var operationResult = eventArgs.OperationResult;
-        if (!operationResult.IsOperationSuccessful)
-        {
-            Console.WriteLine("An error occurred while processing request. Please see error log for more details.");
-        }
-        else
-        {
-            var successResult = (SuccessOperationResult<ChatResponse>)operationResult;
-            var chatResponse = successResult.Item;
-            if (!eventArgs.IsLastResponse)
-            {
-                Console.Write(chatResponse.Response);
-            }
-            else
-            {
-                Console.WriteLine();
-                var state = eventArgs.State;
-#if DEBUG
-                Console.WriteLine($"Token usage - Prompt tokens: {chatResponse.PromptTokens + state.PromptTokens}; Completion tokens: {chatResponse.CompletionTokens + state.CompletionTokens}");
-#endif
-                chatResponse.OriginalQuestion = state.UserInput;
-                _logger?.LogChatResponse(chatResponse, eventArgs.State.OperationContext);
-                Console.WriteLine("");
-            }
         }
     }
 }

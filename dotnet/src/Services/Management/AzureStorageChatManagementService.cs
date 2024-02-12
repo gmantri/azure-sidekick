@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using Azure.Core;
-using AzureSidekick.Core.EventArgs;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Models;
 using AzureSidekick.Core.OperationResults;
@@ -41,16 +40,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <see cref="ILogger"/>.
     /// </summary>
     private readonly ILogger _logger;
-        
-    /// <summary>
-    /// <see cref="TaskCompletionSource"/>.
-    /// </summary>
-    private TaskCompletionSource<bool> _tcs;
-
-    /// <summary>
-    /// Event handler for operation result received event.
-    /// </summary>
-    public event EventHandler OperationResultReceivedEventHandler;
 
     /// <summary>
     /// Dictionary of pre-defined messages for certain kinds of intents.
@@ -167,9 +156,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="question">
     /// User's question.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="credential">
     /// <see cref="TokenCredential"/>.
     /// </param>
@@ -179,67 +165,80 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <returns>
     /// Chat result. Could be <see cref="SuccessOperationResult{ChatResponse}"/> or <see cref="FailOperationResult"/>.
     /// </returns>
-    public async Task GetStreamingResponse(string subscriptionId, string question,
-        StreamingResponseState state = default, TokenCredential credential = default,
+    public async IAsyncEnumerable<IOperationResult> GetStreamingResponse(string subscriptionId, string question,
+        TokenCredential credential = default,
         IOperationContext operationContext = default)
     {
         var context = new OperationContext("AzureStorageChatManagementService:GetStreamingResponse", $"Get response. Question: {question}", operationContext);
-        _tcs = new TaskCompletionSource<bool>();
-        var streamingResponseState = state ?? new StreamingResponseState()
-        {
-            OperationContext = context
-        };
+        IOperationResult failureResult = null;
+        IOperationResult unableToAnswerResult = null;
+        IAsyncEnumerable<IOperationResult> successResult = null;
+        var promptTokens = 0;
+        var completionTokens = 0;
         try
         {
             var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             // first get the intent of the question.
             var result = await RecognizeIntent(question, chatHistory, context);
-            streamingResponseState.PromptTokens += result.PromptTokens;
-            streamingResponseState.CompletionTokens += result.CompletionTokens;
+            promptTokens += result.PromptTokens;
+            completionTokens += result.CompletionTokens;
             var intent = result.Response;
             switch (intent)
             {
                 case Core.Constants.StorageIntents.GeneralInformation:
                 {
-                    await GetStreamingResponseForGeneralStorageInformationQuestion(question, chatHistory,
-                        streamingResponseState, context);
+                    successResult = GetStreamingResponseForGeneralStorageInformationQuestion(question, chatHistory,
+                        context);
                     break;
                 }
                 case Core.Constants.StorageIntents.StorageAccounts:
                 {
-                    await GetStreamingResponseForStorageAccountsQuestion(subscriptionId, question, chatHistory, streamingResponseState,
+                    successResult = GetStreamingResponseForStorageAccountsQuestion(subscriptionId, question, chatHistory,
                         credential, context);
                     break;
                 }
                 case Core.Constants.StorageIntents.StorageAccount:
                 {
-                    await GetStreamingResponseForStorageAccountQuestion(subscriptionId, question, chatHistory,
-                        streamingResponseState,
+                    successResult = GetStreamingResponseForStorageAccountQuestion(subscriptionId, question, chatHistory,
                         credential, context);
                     break;
                 }
                 default:
                 {
-                    await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question,
-                        _predefinedMessages["UnableToAnswer"], intent, streamingResponseState, context);
+                    unableToAnswerResult = GetPredefinedOperationResult(question, _predefinedMessages["UnableToAnswer"],
+                        intent, promptTokens, completionTokens);
                     break;
                 }
             }
         }
         catch (Exception exception)
         {
-            var result = Helper.GetFailOperationResultFromException(exception, _logger, context);
-            var eventArgs = new OperationResultReceivedEventArgs()
-            {
-                OperationResult = result,
-                IsLastResponse = true,
-                State = streamingResponseState
-            };
-            RaiseOperationResultReceivedEvent(eventArgs);
+            failureResult = Helper.GetFailOperationResultFromException(exception, _logger, context);
         }
         finally
         {
             _logger?.LogOperation(context);
+        }
+
+        if (failureResult != null) yield return failureResult;
+        if (unableToAnswerResult != null) yield return unableToAnswerResult;
+        if (successResult == null) yield break;
+        await foreach (var item in successResult)
+        {
+            if (item is SuccessOperationResult<ChatResponse> successResultItem)
+            {
+                // add prompt & completion tokens for get intent LLM call to the last chat response.
+                if (successResultItem.StatusCode == HttpStatusCode.NoContent)
+                {
+                    successResultItem.Item.PromptTokens += promptTokens;
+                    successResultItem.Item.CompletionTokens += completionTokens;
+                }
+                yield return successResultItem;
+            }
+            else
+            {
+                yield return item;
+            }
         }
     }
 
@@ -298,21 +297,22 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="chatHistory">
     /// Chat history.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
     /// <returns>
     /// <see cref="ChatResponse"/>.
     /// </returns>
-    private async Task GetStreamingResponseForGeneralStorageInformationQuestion(string question,
-        IEnumerable<ChatResponse> chatHistory, StreamingResponseState state = default, IOperationContext operationContext = default)
+    private async IAsyncEnumerable<IOperationResult> GetStreamingResponseForGeneralStorageInformationQuestion(string question,
+        IEnumerable<ChatResponse> chatHistory, IOperationContext operationContext = default)
     {
         var arguments = GetDefaultChatArguments(chatHistory);
-        await GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.GeneralInformation, arguments,
-            state, operationContext);
+        var successResult = GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.GeneralInformation, arguments,
+            operationContext);
+        await foreach (var item in successResult)
+        {
+            yield return item;
+        }
     }
 
     /// <summary>
@@ -376,9 +376,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="chatHistory">
     /// Chat history.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="credential">
     /// <see cref="TokenCredential"/>.
     /// </param>
@@ -388,15 +385,16 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <returns>
     /// <see cref="ChatResponse"/>.
     /// </returns>
-    private async Task GetStreamingResponseForStorageAccountsQuestion(string subscriptionId, string question,
-        IEnumerable<ChatResponse> chatHistory, StreamingResponseState state,
+    private async IAsyncEnumerable<IOperationResult> GetStreamingResponseForStorageAccountsQuestion(string subscriptionId, string question,
+        IEnumerable<ChatResponse> chatHistory, 
         TokenCredential credential = default, IOperationContext operationContext = default)
     {
         var storageAccounts = (await _storageOperationsRepository.List(subscriptionId, credential, operationContext)).ToList();
         if (storageAccounts.Count == 0)
         {
-            await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, _predefinedMessages["NoStorageAccounts"],
-                Core.Constants.StorageIntents.StorageAccounts, state, operationContext);
+            var noStorageAccountsOperationResult = GetPredefinedOperationResult(question,
+                _predefinedMessages["NoStorageAccounts"], Core.Constants.StorageIntents.StorageAccounts, 0, 0);
+            yield return noStorageAccountsOperationResult;
         }
         else
         {
@@ -408,8 +406,13 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             }
             var arguments = GetDefaultChatArguments(chatHistory);
             arguments[Constants.ChatArguments.Context] = context.ToString();
-            await GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.StorageAccounts, arguments,
-                state, operationContext);
+            var successResult = GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.StorageAccounts, arguments,
+                operationContext);
+
+            await foreach (var item in successResult)
+            {
+                yield return item;
+            }
         }
     }
 
@@ -488,9 +491,6 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="chatHistory">
     /// Chat history.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="credential">
     /// <see cref="TokenCredential"/>.
     /// </param>
@@ -500,18 +500,21 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <returns>
     /// <see cref="ChatResponse"/>.
     /// </returns>
-    private async Task GetStreamingResponseForStorageAccountQuestion(string subscriptionId, string question,
-        IEnumerable<ChatResponse> chatHistory, StreamingResponseState state,
+    private async IAsyncEnumerable<IOperationResult> GetStreamingResponseForStorageAccountQuestion(string subscriptionId, string question,
+        IEnumerable<ChatResponse> chatHistory,
         TokenCredential credential = default, IOperationContext operationContext = default)
     {
+        var promptTokens = 0;
+        var completionTokens = 0;
         var result = await GetStorageEntities(question, chatHistory, operationContext);
-        state.PromptTokens += result.PromptTokens;
-        state.CompletionTokens += result.CompletionTokens;
+        promptTokens += result.PromptTokens;
+        completionTokens += result.CompletionTokens;
         var storageEntities = ExtractStorageEntitiesFromChatResponse(result);
         if (string.IsNullOrWhiteSpace(storageEntities?.StorageAccount))
         {
-            await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, _predefinedMessages["UnableToExtractStorageAccountName"],
-                Core.Constants.StorageIntents.StorageAccount, state, operationContext);
+            var failedToExtractStorageAccountNameOperationResult = GetPredefinedOperationResult(question,
+                _predefinedMessages["UnableToExtractStorageAccountName"], Core.Constants.StorageIntents.StorageAccount, promptTokens, completionTokens);
+            yield return failedToExtractStorageAccountNameOperationResult;
         }
         else
         {
@@ -519,16 +522,23 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
                 await _storageOperationsRepository.Get(subscriptionId, storageEntities.StorageAccount, credential, operationContext);
             if (storageAccount == null)
             {
-                await GenerateEventArgsAndRaiseOperationResultReceivedEvent(question, 
-                    string.Format(_predefinedMessages["UnableToFindStorageAccountDetails"], storageEntities.StorageAccount),
-                    Core.Constants.StorageIntents.StorageAccount, state, operationContext);
+                var unableToFindStorageAccountOperationResult = GetPredefinedOperationResult(question,
+                    string.Format(_predefinedMessages["UnableToFindStorageAccountDetails"],
+                        storageEntities.StorageAccount), Core.Constants.StorageIntents.StorageAccount, promptTokens,
+                    completionTokens);
+                yield return unableToFindStorageAccountOperationResult;
             }
             else
             {
                 var arguments = GetDefaultChatArguments(chatHistory);
                 arguments[Constants.ChatArguments.Context] = storageAccount.ConvertToYaml();
-                await GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.StorageAccount, arguments,
-                    state, operationContext);
+                var successResult = GetStreamingResponseFromLlm(question, Core.Constants.StorageIntents.StorageAccount, arguments,
+                    operationContext, promptTokens, completionTokens);
+
+                await foreach (var item in successResult)
+                {
+                    yield return item;
+                }
             }
         }
     }
@@ -568,36 +578,39 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="arguments">
     /// Arguments for prompt execution.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="operationContext">
     /// <see cref="IOperationContext"/>.
     /// </param>
-    private async Task GetStreamingResponseFromLlm(string question, string functionName,
-        IDictionary<string, object> arguments, StreamingResponseState state, IOperationContext operationContext)
+    /// <param name="previousPromptTokens">
+    /// Prompt tokens from any previous LLM calls before calling this method.
+    /// </param>
+    /// <param name="previousCompletionTokens">
+    /// Completion tokens from any previous LLM calls before calling this method.
+    /// </param>
+    private async IAsyncEnumerable<IOperationResult> GetStreamingResponseFromLlm(string question, string functionName,
+        IDictionary<string, object> arguments, IOperationContext operationContext, int previousPromptTokens = 0, int previousCompletionTokens = 0)
     {
         var streamingResponseResult = _genAIRepository.GetStreamingResponse(question, ServiceName,
             functionName, arguments, operationContext);
         await foreach (var chatResponse in streamingResponseResult)
         {
-            var operationResult = new SuccessOperationResult<ChatResponse>()
-            {
-                Item = chatResponse,
-                StatusCode = HttpStatusCode.OK
-            };
             var isLastResponse = (chatResponse.PromptTokens > 0 || chatResponse.CompletionTokens > 0) &&
                                  chatResponse.StoreInChatHistory;
             if (isLastResponse)
             {
+                chatResponse.PromptTokens += previousPromptTokens;
+                chatResponse.CompletionTokens += previousCompletionTokens;
+            }
+            var operationResult = new SuccessOperationResult<ChatResponse>()
+            {
+                Item = chatResponse,
+                StatusCode = isLastResponse ? HttpStatusCode.NoContent : HttpStatusCode.OK // use HttpStatusCode.NoContent to indicate that the consumer should ignore the response.
+            };
+            if (isLastResponse)
+            {
                 await Helper.SaveChatResponse(_chatHistoryOperationsRepository, chatResponse, operationContext);
             }
-            RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
-            {
-                OperationResult = operationResult,
-                IsLastResponse = isLastResponse,
-                State = state
-            });
+            yield return operationResult;
         }
     }
 
@@ -618,25 +631,10 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     }
     
     /// <summary>
-    /// Raise operation completed received event.
-    /// </summary>
-    /// <param name="args">
-    /// <see cref="OperationResultReceivedEventArgs"/>.
-    /// </param>
-    private void RaiseOperationResultReceivedEvent(OperationResultReceivedEventArgs args)
-    {
-        OperationResultReceivedEventHandler?.Invoke(this, args);
-        if (args.IsLastResponse)
-        {
-            _tcs.SetResult(true);
-        }
-    }
-
-    /// <summary>
-    /// Generate event args and raise operation result received event.
+    /// Create a pre-defined chat response for certain question intents.
     /// </summary>
     /// <param name="question">
-    /// User's question.
+    /// User question.
     /// </param>
     /// <param name="message">
     /// Message to be included in response.
@@ -644,13 +642,16 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
     /// <param name="function">
     /// Question sub intent.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
+    /// <param name="promptTokens">
+    /// Prompt tokens.
     /// </param>
-    /// <param name="operationContext">
-    /// <see cref="IOperationContext"/>.
+    /// <param name="completionTokens">
+    /// Completion tokens.
     /// </param>
-    private async Task GenerateEventArgsAndRaiseOperationResultReceivedEvent(string question, string message, string function, StreamingResponseState state, IOperationContext operationContext)
+    /// <returns>
+    /// Chat result. <see cref="SuccessOperationResult{ChatResponse}"/>.
+    /// </returns>
+    private IOperationResult GetPredefinedOperationResult(string question, string message, string function, int promptTokens, int completionTokens)
     {
         var chatResponse = new ChatResponse()
         {
@@ -658,23 +659,15 @@ public class AzureStorageChatManagementService : BaseChatManagementService, IAzu
             Response = message,
             Intent = ServiceName,
             Function = function,
-            StoreInChatHistory = true
+            PromptTokens = promptTokens,
+            CompletionTokens = completionTokens
         };
-        await Helper.SaveChatResponse(_chatHistoryOperationsRepository, chatResponse, operationContext);
-        var eventArgs = new OperationResultReceivedEventArgs()
+        var result = new SuccessOperationResult<ChatResponse>()
         {
-            OperationResult = new SuccessOperationResult<ChatResponse>()
-            {
-                StatusCode = HttpStatusCode.OK,
-                Item = chatResponse
-            },
-            IsLastResponse = false,
-            State = state
+            Item = chatResponse,
+            StatusCode = HttpStatusCode.OK
         };
-        RaiseOperationResultReceivedEvent(eventArgs);
-        // raise the same event again but set this as the last response.
-        eventArgs.IsLastResponse = true;
-        RaiseOperationResultReceivedEvent(eventArgs);
+        return result;
     }
 
     /// <summary>

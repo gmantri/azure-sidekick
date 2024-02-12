@@ -1,5 +1,4 @@
 using System.Net;
-using AzureSidekick.Core.EventArgs;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Models;
 using AzureSidekick.Core.OperationResults;
@@ -28,16 +27,6 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <see cref="ILogger"/>.
     /// </summary>
     private readonly ILogger _logger;
-    
-    /// <summary>
-    /// <see cref="TaskCompletionSource"/>.
-    /// </summary>
-    private TaskCompletionSource<bool> _tcs;
-
-    /// <summary>
-    /// Event handler for operation result received event.
-    /// </summary>
-    public event EventHandler OperationResultReceivedEventHandler;
 
     /// <summary>
     /// Dictionary of pre-defined messages for certain kinds of intents.
@@ -202,59 +191,48 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <param name="intent">
     /// Question's intent.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
-    public async Task GetStreamingResponse(string question, string intent,
-        StreamingResponseState state = default, IOperationContext operationContext = default)
+    /// <returns>
+    /// Streaming chat result. See <see cref="IAsyncEnumerable{IOperationResult}"/>.
+    /// </returns>
+    public async IAsyncEnumerable<IOperationResult> GetStreamingResponse(string question, string intent,
+        IOperationContext operationContext = default)
     {
         var context = new OperationContext("GeneralChatManagementService:GetStreamingResponse", $"Get response. Question: {question}; Intent: {intent}.", operationContext);
-        var streamingResponseState = state ?? new StreamingResponseState()
-        {
-            OperationContext = context
-        };
+        IOperationResult failureResult = null;
+        IOperationResult predefinedOperationResult = null;
+        IAsyncEnumerable<IOperationResult> result = null;
         try
         {
-            _tcs = new TaskCompletionSource<bool>();
             var chatHistory = await _chatHistoryOperationsRepository.List(context.UserId, context);
             switch (intent)
             {
                 case Core.Constants.Intent.Azure:
                 case Core.Constants.Intent.Information:
-                    await GetStreamingResponseFromLlm(question, "General", intent, chatHistory, state, context);
+                    result = GetStreamingResponseFromLlm(question, "General", intent, chatHistory, context);
                     break;
                 default:
-                    var result = GetPredefinedOperationResult(question, intent);
-                    var eventArgs = new OperationResultReceivedEventArgs()
-                    {
-                        OperationResult = result,
-                        IsLastResponse = false,
-                        State = streamingResponseState
-                    };
-                    RaiseOperationResultReceivedEvent(eventArgs);
-                    // raise the same event again but set this as the last response.
-                    eventArgs.IsLastResponse = true;
-                    RaiseOperationResultReceivedEvent(eventArgs);
+                    predefinedOperationResult = GetPredefinedOperationResult(question, intent);
                     break;
             }
         }
         catch (Exception exception)
         {
-            var result = Helper.GetFailOperationResultFromException(exception, _logger, context);
-            var eventArgs = new OperationResultReceivedEventArgs()
-            {
-                OperationResult = result,
-                IsLastResponse = true,
-                State = streamingResponseState
-            };
-            RaiseOperationResultReceivedEvent(eventArgs);
+            failureResult = Helper.GetFailOperationResultFromException(exception, _logger, context);
         }
         finally
         {
             _logger?.LogOperation(context);
+        }
+
+        if (failureResult != null) yield return failureResult;
+        if (predefinedOperationResult != null) yield return predefinedOperationResult;
+        if (result == null) yield break;
+        await foreach (var item in result)
+        {
+            yield return item;
         }
     }
 
@@ -336,15 +314,11 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
     /// <param name="functionName">
     /// Function name.
     /// </param>
-    /// <param name="state">
-    /// <see cref="StreamingResponseState"/>.
-    /// </param>
     /// <param name="operationContext">
     /// Operation context.
     /// </param>
-    private async Task GetStreamingResponseFromLlm(string question, string pluginName, string functionName,
+    private async IAsyncEnumerable<IOperationResult> GetStreamingResponseFromLlm(string question, string pluginName, string functionName,
         IEnumerable<ChatResponse> chatHistory,
-        StreamingResponseState state,
         IOperationContext operationContext)
     {
         var arguments = GetDefaultChatArguments(chatHistory);
@@ -352,38 +326,18 @@ public class GeneralChatManagementService : BaseChatManagementService, IGeneralC
             operationContext);
         await foreach (var chatResponse in result)
         {
+            var isLastResponse = (chatResponse.PromptTokens > 0 || chatResponse.CompletionTokens > 0) &&
+                                 chatResponse.StoreInChatHistory;
             var operationResult = new SuccessOperationResult<ChatResponse>()
             {
                 Item = chatResponse,
-                StatusCode = HttpStatusCode.OK
+                StatusCode = isLastResponse ? HttpStatusCode.NoContent : HttpStatusCode.OK // use HttpStatusCode.NoContent to indicate that the consumer should ignore the response.
             };
-            var isLastResponse = (chatResponse.PromptTokens > 0 || chatResponse.CompletionTokens > 0) &&
-                                 chatResponse.StoreInChatHistory;
             if (isLastResponse)
             {
                 await Helper.SaveChatResponse(_chatHistoryOperationsRepository, chatResponse, operationContext);
             }
-            RaiseOperationResultReceivedEvent(new OperationResultReceivedEventArgs()
-            {
-                OperationResult = operationResult,
-                IsLastResponse = isLastResponse,
-                State = state
-            });
-        }
-    }
-    
-    /// <summary>
-    /// Raise operation completed received event.
-    /// </summary>
-    /// <param name="args">
-    /// <see cref="OperationResultReceivedEventArgs"/>.
-    /// </param>
-    private void RaiseOperationResultReceivedEvent(OperationResultReceivedEventArgs args)
-    {
-        OperationResultReceivedEventHandler?.Invoke(this, args);
-        if (args.IsLastResponse)
-        {
-            _tcs.SetResult(true);
+            yield return operationResult;
         }
     }
 
