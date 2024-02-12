@@ -1,5 +1,4 @@
 using System.Net;
-using AzureSidekick.Core.EventArgs;
 using AzureSidekick.Core.Exceptions;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Models;

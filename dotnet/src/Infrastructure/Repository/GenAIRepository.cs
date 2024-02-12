@@ -3,7 +3,6 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
 using Azure.AI.OpenAI;
-using AzureSidekick.Core.EventArgs;
 using AzureSidekick.Core.Interfaces;
 using AzureSidekick.Core.Models;
 using AzureSidekick.Infrastructure.Interfaces;
@@ -199,7 +198,10 @@ public class GenAIRepository : IGenAIRepository
                 Question = question,
                 Intent = pluginName,
                 Function = functionName,
-                Response = response
+                Response = response,
+                PromptTokens = 0,
+                CompletionTokens = 0,
+                StoreInChatHistory = false
             };
             yield return streamingChatResponse;
         }
